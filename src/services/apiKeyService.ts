@@ -1,3 +1,9 @@
+import {
+  LOCAL_FALLBACK_MODEL_ID,
+  normalizeStoredModelId,
+  normalizeStoredProvider,
+} from '../utils/aiFallbackOrder';
+
 const GEMINI_KEY_STORAGE = 'fichemaster_gemini_api_key';
 const ANTHROPIC_KEY_STORAGE = 'fichemaster_anthropic_api_key';
 const OPENAI_KEY_STORAGE = 'fichemaster_openai_api_key';
@@ -71,13 +77,13 @@ export const ALL_MODELS: ModelOption[] = [
     description: 'Multimodal rapide et structuration JSON rigoureuse'
   },
 
-  // --- MODE LOCAL PRIORITAIRE ---
+  // --- MODE LOCAL (DERNIER RECOURS) ---
   {
-    id: 'local-priority',
+    id: LOCAL_FALLBACK_MODEL_ID,
     provider: 'local',
-    name: 'Mode Local Prioritaire (Zero Clé)',
-    badge: '100% Offline',
-    description: 'Extraction 100% dans votre navigateur sans aucune API ni connexion'
+    name: 'Mode Local (Dernier recours)',
+    badge: '4e · Offline',
+    description: 'Extraction hors-ligne dans votre navigateur uniquement en dernier recours après Gemini, Claude et ChatGPT'
   }
 ];
 
@@ -136,19 +142,30 @@ export function setGroqApiKey(key: string): void {
 // --- MODÈLE & FOURNISSEUR ACTIF ---
 export function getSelectedModel(): string {
   const stored = localStorage.getItem(SELECTED_MODEL_STORAGE);
-  return stored || 'gemini-3.1-pro';
+  const normalized = normalizeStoredModelId(stored);
+  if (stored && stored !== normalized) {
+    localStorage.setItem(SELECTED_MODEL_STORAGE, normalized);
+    localStorage.setItem(SELECTED_PROVIDER_STORAGE, 'gemini');
+  }
+  return normalized;
 }
 export function setSelectedModel(modelId: string): void {
-  localStorage.setItem(SELECTED_MODEL_STORAGE, modelId);
-  const found = ALL_MODELS.find(m => m.id === modelId);
+  const normalized = normalizeStoredModelId(modelId);
+  localStorage.setItem(SELECTED_MODEL_STORAGE, normalized);
+  const found = ALL_MODELS.find(m => m.id === normalized);
   if (found) {
     setSelectedProvider(found.provider);
   }
 }
 
 export function getSelectedProvider(): AIProvider {
-  const stored = localStorage.getItem(SELECTED_PROVIDER_STORAGE) as AIProvider;
-  return stored || 'gemini';
+  const rawModel = localStorage.getItem(SELECTED_MODEL_STORAGE);
+  const stored = localStorage.getItem(SELECTED_PROVIDER_STORAGE);
+  const normalized = normalizeStoredProvider(stored, rawModel);
+  if (stored && stored !== normalized) {
+    localStorage.setItem(SELECTED_PROVIDER_STORAGE, normalized);
+  }
+  return normalized;
 }
 export function setSelectedProvider(provider: AIProvider): void {
   localStorage.setItem(SELECTED_PROVIDER_STORAGE, provider);

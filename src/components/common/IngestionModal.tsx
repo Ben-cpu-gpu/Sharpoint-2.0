@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, UploadCloud, FileText, CheckCircle2, Loader2, Sparkles, AlertTriangle, FileCode } from 'lucide-react';
 import { extractTextFromPdf } from '../../services/pdfService';
 import { transformLectureToToolbox, parseTdDocument } from '../../services/aiService';
 import { AnnaleItem, StudySheet, TDExercise } from '../../types/course';
+import { availableSubjects } from '../../data/initialData';
+import { resolveSubjectId } from '../../utils/courseCatalog';
 
 interface IngestionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultSubjectId?: string | 'all';
   onSheetCreated: (sheet: StudySheet) => void;
   onTdCreated: (exercises: TDExercise[]) => void;
   onAnnalesCreated: (annales: AnnaleItem[]) => void;
@@ -17,11 +20,16 @@ type DestinationType = 'sheet' | 'td' | 'annale';
 export const IngestionModal: React.FC<IngestionModalProps> = ({
   isOpen,
   onClose,
+  defaultSubjectId,
   onSheetCreated,
   onTdCreated,
   onAnnalesCreated,
 }) => {
+  const validSubjectIds = availableSubjects.map(s => s.id);
   const [targetType, setTargetType] = useState<DestinationType>('sheet');
+  const [targetSubjectId, setTargetSubjectId] = useState<string>(() =>
+    resolveSubjectId(defaultSubjectId, validSubjectIds)
+  );
   const [rawText, setRawText] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -30,6 +38,12 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
   const [pendingTextToProcess, setPendingTextToProcess] = useState<string>('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setTargetSubjectId(resolveSubjectId(defaultSubjectId, availableSubjects.map(s => s.id)));
+    }
+  }, [isOpen, defaultSubjectId]);
 
   if (!isOpen) return null;
 
@@ -68,7 +82,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
             ? 'Génération locale de la fiche...'
             : 'Extraction de la fiche de révision via IA...'
         );
-        const newSheet = await transformLectureToToolbox(text, forceLocal);
+        const newSheet = await transformLectureToToolbox(text, forceLocal, targetSubjectId);
         onSheetCreated(newSheet);
       } else if (targetType === 'td') {
         setProgressStep(
@@ -76,7 +90,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
             ? 'Découpage local des exercices...'
             : 'Découpage du TD et génération des résolutions...'
         );
-        const exercises = (await parseTdDocument(text, 'td', forceLocal)) as TDExercise[];
+        const exercises = (await parseTdDocument(text, 'td', forceLocal, targetSubjectId)) as TDExercise[];
         onTdCreated(exercises);
       } else {
         setProgressStep(
@@ -84,7 +98,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
             ? "Découpage local de l'annale..."
             : "Découpage de l'annale et barème officiel..."
         );
-        const annales = (await parseTdDocument(text, 'annale', forceLocal)) as AnnaleItem[];
+        const annales = (await parseTdDocument(text, 'annale', forceLocal, targetSubjectId)) as AnnaleItem[];
         onAnnalesCreated(annales);
       }
 
@@ -178,8 +192,9 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
                 </h4>
               </div>
               <p className="text-xs text-slate-200 leading-relaxed">
-                Les serveurs IA ont retourné une erreur ou aucune clé n'est active. Voulez-vous basculer sur le{' '}
-                <strong>Mode Brouillon Local</strong> (extraction Regex 100% hors-ligne) ?
+                Gemini, Claude et ChatGPT n'ont pas pu être joints (ou aucune clé API n'est configurée). Voulez-vous
+                basculer en dernier recours sur le <strong>Mode Local</strong> (extraction hors-ligne dans votre
+                navigateur) ?
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <button
@@ -247,6 +262,24 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
                 <span className="text-[11px] text-slate-400 mt-0.5">Barème & chronomètre</span>
               </button>
             </div>
+          </div>
+
+          <div>
+            <label htmlFor="ingestSubjectSelect" className="block text-xs font-semibold text-slate-300 mb-2">
+              Matière associée
+            </label>
+            <select
+              id="ingestSubjectSelect"
+              value={targetSubjectId}
+              onChange={e => setTargetSubjectId(e.target.value)}
+              className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] px-3.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-400/60 cursor-pointer"
+            >
+              {availableSubjects.map(sub => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

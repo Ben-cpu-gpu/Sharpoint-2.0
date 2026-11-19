@@ -14,6 +14,10 @@ import { AnnalesSection } from './components/annales/AnnalesSection';
 import { StudySheet, TDExercise, AnnaleItem, Subject } from './types/course';
 import { availableSubjects } from './data/initialData';
 import {
+  resolveActiveSheet,
+  resolveSubjectId,
+} from './utils/courseCatalog';
+import {
   loadInitialData,
   saveAppData,
   exportDataAsJson,
@@ -22,6 +26,7 @@ import {
 import {
   BookOpen,
   Plus,
+  PlusCircle,
   Trash2,
   CheckCircle2,
   Search,
@@ -108,9 +113,13 @@ export const App: React.FC = () => {
   };
 
   const handleCreateBlankSheet = () => {
+    const targetSubjectId = resolveSubjectId(
+      selectedSubjectId,
+      availableSubjects.map(s => s.id)
+    );
     const newSheet: StudySheet = {
       id: `sheet_${Date.now()}`,
-      subjectId: selectedSubjectId === 'all' ? 'meca-flu' : selectedSubjectId,
+      subjectId: targetSubjectId,
       title: 'Nouvelle Fiche de Cours',
       subtitle: 'Description synthétique du chapitre',
       chapter: 'Nouveau Chapitre',
@@ -168,6 +177,8 @@ export const App: React.FC = () => {
     }
     return true;
   });
+
+  const resolvedActiveSheet = resolveActiveSheet(filteredSheets, activeSheetId);
 
   const getMasteryLabel = (mastery: StudySheet['mastery']) => {
     if (mastery === 'mastered') return 'Maîtrisé';
@@ -295,11 +306,11 @@ export const App: React.FC = () => {
                       <div className="space-y-2 max-h-[68vh] overflow-y-auto pr-1">
                         {filteredSheets.length === 0 ? (
                           <div className="p-6 text-center text-slate-400 bg-[#0A0E19]/70 rounded-2xl border border-white/[0.08] text-xs">
-                            Aucune fiche trouvée pour ces critères.
+                            Aucune fiche enregistrée pour le moment.
                           </div>
                         ) : (
                           filteredSheets.map(s => {
-                            const isSelected = activeSheet && activeSheet.id === s.id;
+                            const isSelected = resolvedActiveSheet && resolvedActiveSheet.id === s.id;
                             return (
                               <div
                                 key={s.id}
@@ -367,25 +378,51 @@ export const App: React.FC = () => {
 
                     {/* Visualiseur de la fiche active */}
                     <div className="lg:col-span-8">
-                      {activeSheet ? (
+                      {resolvedActiveSheet ? (
                         <SheetViewer
-                          sheet={activeSheet}
-                          onEdit={() => setIsEditingSheet(true)}
+                          sheet={resolvedActiveSheet}
+                          onEdit={() => {
+                            setActiveSheetId(resolvedActiveSheet.id);
+                            setIsEditingSheet(true);
+                          }}
                           onOpenRevision={mode => {
+                            setActiveSheetId(resolvedActiveSheet.id);
                             setRevisionInitialMode(mode);
                             setIsRevisionOpen(true);
                           }}
                           onUpdateSheet={handleUpdateSheet}
                         />
                       ) : (
-                        <div className="py-24 text-center text-slate-400 bg-[#0A0E19]/80 rounded-2xl border border-white/[0.08]">
-                          <BookOpen className="w-10 h-10 mx-auto opacity-40 text-amber-400 mb-3" />
-                          <h3 className="font-display text-base font-bold text-slate-100">
-                            Sélectionnez ou créez une fiche
-                          </h3>
-                          <p className="text-xs text-slate-400 mt-1">
-                            Ingérez un polycopié PDF pour générer une synthèse structurée.
-                          </p>
+                        <div className="py-20 px-6 text-center text-slate-400 bg-[#0A0E19]/80 rounded-2xl border border-white/[0.08] space-y-5">
+                          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-400/25 flex items-center justify-center mx-auto">
+                            <BookOpen className="w-6 h-6 text-amber-400" />
+                          </div>
+                          <div className="max-w-md mx-auto space-y-1.5">
+                            <h3 className="font-display text-base font-bold text-slate-100">
+                              Votre espace de révision est prêt
+                            </h3>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                              Importez un polycopié de cours PDF pour générer une fiche structurée par IA, ou créez une fiche vierge manuellement.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center justify-center gap-2.5">
+                            <button
+                              type="button"
+                              onClick={() => setIsIngestionOpen(true)}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold transition-colors"
+                            >
+                              <PlusCircle className="w-4 h-4" />
+                              <span>Ingérer un PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCreateBlankSheet}
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#04060C] hover:bg-[#101625] border border-white/[0.1] text-slate-200 text-xs font-semibold transition-colors"
+                            >
+                              <Plus className="w-4 h-4 text-amber-400" />
+                              <span>Créer une fiche vierge</span>
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -481,6 +518,7 @@ export const App: React.FC = () => {
         <IngestionModal
           isOpen={isIngestionOpen}
           onClose={() => setIsIngestionOpen(false)}
+          defaultSubjectId={selectedSubjectId}
           onSheetCreated={handleSheetIngested}
           onTdCreated={handleTdIngested}
           onAnnalesCreated={handleAnnalesIngested}

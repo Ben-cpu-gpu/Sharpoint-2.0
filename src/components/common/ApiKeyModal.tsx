@@ -26,7 +26,6 @@ import {
   getSelectedModel,
   setSelectedModel,
   getSelectedProvider,
-  setSelectedProvider,
   ALL_MODELS,
   AIProvider,
 } from '../../services/apiKeyService';
@@ -73,7 +72,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const handleSelectModel = (modelId: string, provider: AIProvider) => {
     setModel(modelId);
     setActiveTab(provider);
-    setSelectedModel(modelId);
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -83,7 +81,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setOpenAIApiKey(openaiKey);
     setGroqApiKey(groqKey);
     setSelectedModel(selectedModel);
-    setSelectedProvider(activeTab);
     onKeysUpdated();
     setSavedSuccess(true);
     setTimeout(() => {
@@ -144,10 +141,31 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 text-xs text-slate-300">
+          <div className="p-3.5 rounded-xl bg-[#04060C] border border-white/[0.08] space-y-1.5">
+            <span className="text-[11px] font-semibold text-slate-200 block">
+              Ordre de priorité automatique
+            </span>
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              <span className={isGeminiConnected ? 'text-amber-300 font-semibold' : 'text-slate-300 font-semibold'}>
+                1. Gemini (local)
+              </span>
+              <span className="mx-1.5 text-slate-500">→</span>
+              <span className={isClaudeConnected ? 'text-sky-300 font-semibold' : 'text-slate-300 font-semibold'}>
+                2. Claude
+              </span>
+              <span className="mx-1.5 text-slate-500">→</span>
+              <span className={isOpenaiConnected ? 'text-emerald-300 font-semibold' : 'text-slate-300 font-semibold'}>
+                3. ChatGPT
+              </span>
+              <span className="mx-1.5 text-slate-500">→</span>
+              <span className="text-slate-400">4. Mode Local (dernier recours)</span>
+            </p>
+          </div>
+
           <div className="space-y-2.5">
             <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
               <Cpu className="w-4 h-4 text-amber-400" />
-              <span>Fournisseur d'IA actif</span>
+              <span>Fournisseur à configurer</span>
             </label>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -161,8 +179,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 }`}
               >
                 <Sparkles className="w-4 h-4 mb-1.5 text-amber-400" />
-                <span className="font-semibold text-xs">Gemini 3</span>
-                <span className="text-[11px] text-slate-400">Notebook IA</span>
+                <span className="font-semibold text-xs">1 · Gemini 3</span>
+                <span className="text-[11px] text-slate-400">Prioritaire</span>
               </button>
 
               <button
@@ -175,8 +193,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 }`}
               >
                 <Zap className="w-4 h-4 mb-1.5 text-sky-400" />
-                <span className="font-semibold text-xs">Claude 5.5</span>
-                <span className="text-[11px] text-slate-400">Sonnet / Haiku</span>
+                <span className="font-semibold text-xs">2 · Claude 5.5</span>
+                <span className="text-[11px] text-slate-400">Relais #2</span>
               </button>
 
               <button
@@ -189,26 +207,22 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 }`}
               >
                 <Layers className="w-4 h-4 mb-1.5 text-emerald-400" />
-                <span className="font-semibold text-xs">ChatGPT</span>
-                <span className="text-[11px] text-slate-400">GPT-5 / 4o</span>
+                <span className="font-semibold text-xs">3 · ChatGPT</span>
+                <span className="text-[11px] text-slate-400">Relais #3</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => {
-                  setActiveTab('local');
-                  setModel('local-priority');
-                  setSelectedModel('local-priority');
-                }}
+                onClick={() => setActiveTab('local')}
                 className={`p-3 rounded-xl border flex flex-col items-center text-center transition-colors ${
                   activeTab === 'local'
-                    ? 'bg-[#101625] border-amber-400/50 text-white'
+                    ? 'bg-[#101625] border-white/[0.22] text-white'
                     : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
-                <Laptop className="w-4 h-4 mb-1.5 text-amber-300" />
-                <span className="font-semibold text-xs">Mode Local</span>
-                <span className="text-[11px] text-slate-400">100% Offline</span>
+                <Laptop className="w-4 h-4 mb-1.5 text-slate-300" />
+                <span className="font-semibold text-xs">4 · Mode Local</span>
+                <span className="text-[11px] text-slate-400">Dernier recours</span>
               </button>
             </div>
           </div>
@@ -371,13 +385,16 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           )}
 
           {activeTab === 'local' && (
-            <div className="p-4 rounded-xl bg-[#04060C] border border-amber-400/30 text-amber-100/90 space-y-1.5">
-              <p className="font-semibold text-xs text-amber-300 flex items-center gap-1.5">
-                <Laptop className="w-4 h-4" />
-                <span>Mode Local Prioritaire Activé</span>
+            <div className="p-4 rounded-xl bg-[#04060C] border border-white/[0.12] text-slate-200 space-y-1.5">
+              <p className="font-semibold text-xs text-slate-100 flex items-center gap-1.5">
+                <Laptop className="w-4 h-4 text-slate-300" />
+                <span>Mode Local · Dernier recours (4e)</span>
               </p>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Toutes vos fiches de cours, TD et annales sont extraits dans votre navigateur sans clé API ni requête externe.
+              <p className="text-xs text-slate-400 leading-relaxed">
+                L'application essaie toujours d'abord <strong className="text-slate-200">Gemini</strong>, puis{' '}
+                <strong className="text-slate-200">Claude</strong>, puis{' '}
+                <strong className="text-slate-200">ChatGPT</strong>. L'extraction locale dans le navigateur
+                n'intervient qu'en dernier recours si aucun modèle IA n'est disponible.
               </p>
             </div>
           )}

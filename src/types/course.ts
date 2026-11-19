@@ -82,7 +82,7 @@ export interface AnnaleItem extends TDExercise {
 export interface DebugLog {
   id: string;
   timestamp: string;
-  apiProvider: 'Gemini' | 'Groq' | 'Local';
+  apiProvider: 'Gemini' | 'Claude' | 'OpenAI' | 'Groq' | 'Local';
   model: string;
   status: 'success' | 'error';
   statusCode?: number;

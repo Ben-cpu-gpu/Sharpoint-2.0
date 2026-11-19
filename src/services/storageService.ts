@@ -1,5 +1,6 @@
 import { AnnaleItem, StudySheet, TDExercise } from '../types/course';
 import { initialAnnales, initialSheets, initialTdExercises } from '../data/initialData';
+import { stripInventedSeedData } from '../utils/courseCatalog';
 
 const SHEETS_KEY = 'fichemaster_sheets_v1';
 const TD_KEY = 'fichemaster_td_v1';
@@ -20,10 +21,26 @@ export function loadInitialData(): AppStateData {
     const rawAnnales = localStorage.getItem(ANNALES_KEY);
     const lastSaved = localStorage.getItem(LAST_SAVED_KEY);
 
+    const parsedSheets = rawSheets ? JSON.parse(rawSheets) : initialSheets;
+    const parsedTd = rawTd ? JSON.parse(rawTd) : initialTdExercises;
+    const parsedAnnales = rawAnnales ? JSON.parse(rawAnnales) : initialAnnales;
+
+    const { cleaned, removedCount } = stripInventedSeedData({
+      sheets: Array.isArray(parsedSheets) ? parsedSheets : initialSheets,
+      tdExercises: Array.isArray(parsedTd) ? parsedTd : initialTdExercises,
+      annales: Array.isArray(parsedAnnales) ? parsedAnnales : initialAnnales,
+    });
+
+    if (removedCount > 0) {
+      if (rawSheets) localStorage.setItem(SHEETS_KEY, JSON.stringify(cleaned.sheets));
+      if (rawTd) localStorage.setItem(TD_KEY, JSON.stringify(cleaned.tdExercises));
+      if (rawAnnales) localStorage.setItem(ANNALES_KEY, JSON.stringify(cleaned.annales));
+    }
+
     return {
-      sheets: rawSheets ? JSON.parse(rawSheets) : initialSheets,
-      tdExercises: rawTd ? JSON.parse(rawTd) : initialTdExercises,
-      annales: rawAnnales ? JSON.parse(rawAnnales) : initialAnnales,
+      sheets: cleaned.sheets,
+      tdExercises: cleaned.tdExercises,
+      annales: cleaned.annales,
       lastSavedTime: lastSaved || null,
     };
   } catch (error) {

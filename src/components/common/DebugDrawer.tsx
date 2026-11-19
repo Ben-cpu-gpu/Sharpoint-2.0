@@ -70,7 +70,7 @@ export const DebugDrawer: React.FC = () => {
                     Console d'Inspection & Résilience IA
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Traçabilité des appels Gemini, Groq et Mode Local
+                    Traçabilité des appels Gemini, Claude, ChatGPT, Groq et Mode Local
                   </p>
                 </div>
               </div>
@@ -211,9 +211,9 @@ export const DebugDrawer: React.FC = () => {
               )}
             </div>
 
-            <div className="p-3.5 bg-[#0A0E19] border-t border-white/[0.08] text-xs text-slate-400 flex items-center justify-between">
-              <span>Chaîne de résilience : Modèle actif → Groq → Mode Local</span>
-              <span className="font-mono text-slate-500">Client-Side</span>
+            <div className="p-3.5 bg-[#0A0E19] border-t border-white/[0.08] text-xs text-slate-400 flex items-center justify-between gap-3">
+              <span>Priorité : 1. Gemini → 2. Claude → 3. ChatGPT → 4. Mode Local</span>
+              <span className="font-mono text-slate-500 shrink-0">Client-Side</span>
             </div>
           </div>
         </div>

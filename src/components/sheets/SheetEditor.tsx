@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { StudySheet, TheoremItem, MagicFormula, StepByStepMethod, Flashcard, QuizQuestion } from '../../types/course';
 import { MathView } from '../common/MathView';
+import { availableSubjects } from '../../data/initialData';
 
 interface SheetEditorProps {
   sheet: StudySheet;
@@ -186,7 +187,25 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="sheetSubjectSelect" className="block text-xs font-medium text-slate-400 mb-1">
+                  Matière
+                </label>
+                <select
+                  id="sheetSubjectSelect"
+                  value={formData.subjectId}
+                  onChange={e => setFormData({ ...formData, subjectId: e.target.value })}
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60 cursor-pointer"
+                >
+                  {availableSubjects.map(sub => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-400 mb-1">Chapitre</label>
                 <input

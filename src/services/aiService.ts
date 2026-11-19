@@ -1,4 +1,4 @@
-import { AnnaleItem, QuizQuestion, StudySheet, TDExercise } from '../types/course';
+import { AnnaleItem, DebugLog, QuizQuestion, StudySheet, TDExercise } from '../types/course';
 import { addDebugLog } from './logService';
 import { 
   getGeminiApiKey, 
@@ -8,6 +8,8 @@ import {
   getSelectedModel, 
   getSelectedProvider 
 } from './apiKeyService';
+import { CloudAIProvider, resolveFallbackChain } from '../utils/aiFallbackOrder';
+import { DEFAULT_SUBJECT_ID } from '../utils/courseCatalog';
 
 export const STRICT_EXHAUSTIVENESS_RULE = `CONSIGNE DE RIGUEUR ET D'EXHAUSTIVITÉ ABSOLUE : Tu as interdiction formelle de résumer, de tronquer, d'abréger ou d'omettre des notions. Tu dois extraire l'intégralité du contenu mathématique et physique présent dans le document fourni. Si le document comporte 15 formules, tu dois extraire les 15 formules. N'utilise jamais de 'etc.' ou de 'de même pour...'. Définis 100% des variables avec leurs unités SI.`;
 
@@ -39,7 +41,7 @@ async function callGemini(systemPrompt: string, userPrompt: string, modelOverrid
       provider: 'Gemini',
       model: rawModel,
       statusCode: 401,
-      message: 'Aucune clé API Google Gemini configurée. Ajoutez votre clé ou passez en Mode Local.',
+      message: 'Aucune clé API Google Gemini configurée. Repli vers Claude / ChatGPT ou Mode Local en dernier recours.',
       rawPayload: 'MISSING_API_KEY'
     };
   }
@@ -297,8 +299,23 @@ async function callGroq(systemPrompt: string, userPrompt: string): Promise<strin
   return cleanJsonOutput(content);
 }
 
+const DEFAULT_PROVIDER_MODELS: Record<CloudAIProvider, string> = {
+  gemini: 'gemini-3.1-pro',
+  claude: 'claude-sonnet-5.5',
+  openai: 'gpt-5',
+  groq: 'openai/gpt-oss-120b',
+};
+
+const PROVIDER_LOG_LABELS: Record<CloudAIProvider, DebugLog['apiProvider']> = {
+  gemini: 'Gemini',
+  claude: 'Claude',
+  openai: 'OpenAI',
+  groq: 'Groq',
+};
+
 /**
- * ROUTEUR MULTI-MODÈLES UNIFIÉ AVEC RÉSILIENCE & MODE LOCAL PRIORITAIRE
+ * ROUTEUR MULTI-MODÈLES UNIFIÉ :
+ * 1. Gemini (local/navigateur) -> 2. Claude -> 3. ChatGPT -> (Groq) -> 4. Mode Local (dernier recours)
  */
 async function executeWithFallback<T>(
   systemPrompt: string,
@@ -307,101 +324,86 @@ async function executeWithFallback<T>(
   forceLocal?: boolean,
   localFallbackFn?: () => T
 ): Promise<T> {
-  const provider = getSelectedProvider();
-  const model = getSelectedModel();
+  const selectedProvider = getSelectedProvider();
+  const selectedModel = getSelectedModel();
 
-  // 1. Si Mode Local demandé ou configuré en priorité
-  if (forceLocal || provider === 'local' || model === 'local-priority') {
-    if (localFallbackFn) {
-      addDebugLog({
-        apiProvider: 'Local',
-        model: 'Moteur Regex Client-Side (100% Offline)',
-        status: 'success',
-        statusCode: 200,
-        message: 'Extraction locale prioritaire exécutée instantanément.',
-      });
-      return localFallbackFn();
-    }
-  }
+  const resolution = resolveFallbackChain({
+    selectedProvider,
+    selectedModel,
+    forceLocal,
+    configuredKeys: {
+      gemini: getGeminiApiKey().length > 0,
+      claude: getAnthropicApiKey().length > 0,
+      openai: getOpenAIApiKey().length > 0,
+      groq: getGroqApiKey().length > 0,
+    },
+  });
 
-  // 2. Exécution selon le fournisseur d'IA sélectionné
-  try {
-    let rawResult = '';
-
-    if (provider === 'claude') {
-      rawResult = await callClaude(systemPrompt, userPrompt, model);
-      addDebugLog({
-        apiProvider: 'Claude' as any,
-        model: model,
-        status: 'success',
-        statusCode: 200,
-        message: 'Génération réussie via Anthropic Claude 5.5.',
-        rawPayload: rawResult.substring(0, 500),
-      });
-    } else if (provider === 'openai') {
-      rawResult = await callOpenAI(systemPrompt, userPrompt, model);
-      addDebugLog({
-        apiProvider: 'OpenAI' as any,
-        model: model,
-        status: 'success',
-        statusCode: 200,
-        message: 'Génération réussie via OpenAI ChatGPT (GPT-5).',
-        rawPayload: rawResult.substring(0, 500),
-      });
-    } else {
-      // Défaut : Google Gemini 3
-      rawResult = await callGemini(systemPrompt, userPrompt, model);
-      addDebugLog({
-        apiProvider: 'Gemini',
-        model: model,
-        status: 'success',
-        statusCode: 200,
-        message: 'Génération réussie via Google Gemini 3 (Notebook IA).',
-        rawPayload: rawResult.substring(0, 500),
-      });
-    }
-
-    const parsed = JSON.parse(rawResult);
-    return validator(parsed);
-  } catch (primaryError: any) {
+  // Mode Local uniquement en dernier recours (consentement utilisateur ou sélection explicite)
+  if (resolution.shouldUseLocalImmediately && localFallbackFn) {
     addDebugLog({
-      apiProvider: (primaryError?.provider || provider) as any,
-      model: model,
-      status: 'error',
-      statusCode: primaryError?.statusCode || 0,
-      message: primaryError?.message || `Échec sur ${model}`,
-      rawPayload: primaryError?.rawPayload || JSON.stringify(primaryError),
+      apiProvider: 'Local',
+      model: 'Moteur Regex Client-Side (Dernier recours Offline)',
+      status: 'success',
+      statusCode: 200,
+      message: 'Extraction locale de dernier recours exécutée dans le navigateur.',
     });
-
-    // 3. Fallback Groq si configuré
-    if (getGroqApiKey()) {
-      try {
-        const groqResult = await callGroq(systemPrompt, userPrompt);
-        const parsed = JSON.parse(groqResult);
-        addDebugLog({
-          apiProvider: 'Groq',
-          model: 'openai/gpt-oss-120b',
-          status: 'success',
-          statusCode: 200,
-          message: 'Génération de secours réussie via Groq.',
-          rawPayload: groqResult.substring(0, 500),
-        });
-        return validator(parsed);
-      } catch (groqErr) {
-        console.warn('Fallback Groq également indisponible');
-      }
-    }
-
-    // 4. Déclencher le consentement pour passer en mode local
-    throw new Error('REQUIRE_USER_CONSENT');
+    return localFallbackFn();
   }
+
+  // Cascade ordonnée : 1. Gemini -> 2. Claude -> 3. ChatGPT (-> Groq)
+  for (const currentProvider of resolution.configuredCloudChain) {
+    const modelToUse =
+      currentProvider === selectedProvider
+        ? selectedModel
+        : DEFAULT_PROVIDER_MODELS[currentProvider];
+
+    try {
+      let rawResult = '';
+      if (currentProvider === 'gemini') {
+        rawResult = await callGemini(systemPrompt, userPrompt, modelToUse);
+      } else if (currentProvider === 'claude') {
+        rawResult = await callClaude(systemPrompt, userPrompt, modelToUse);
+      } else if (currentProvider === 'openai') {
+        rawResult = await callOpenAI(systemPrompt, userPrompt, modelToUse);
+      } else {
+        rawResult = await callGroq(systemPrompt, userPrompt);
+      }
+
+      const parsed = JSON.parse(rawResult);
+      const validated = validator(parsed);
+
+      addDebugLog({
+        apiProvider: PROVIDER_LOG_LABELS[currentProvider],
+        model: modelToUse,
+        status: 'success',
+        statusCode: 200,
+        message: `Génération réussie via ${PROVIDER_LOG_LABELS[currentProvider]} (${modelToUse}).`,
+        rawPayload: rawResult.substring(0, 500),
+      });
+
+      return validated;
+    } catch (providerError: any) {
+      addDebugLog({
+        apiProvider: (providerError?.provider || PROVIDER_LOG_LABELS[currentProvider]) as DebugLog['apiProvider'],
+        model: modelToUse,
+        status: 'error',
+        statusCode: providerError?.statusCode || 0,
+        message: providerError?.message || `Échec sur ${modelToUse}, tentative du fournisseur suivant...`,
+        rawPayload: providerError?.rawPayload || JSON.stringify(providerError),
+      });
+    }
+  }
+
+  // Aucun fournisseur IA n'a répondu : proposer le Mode Local en dernier recours
+  throw new Error('REQUIRE_USER_CONSENT');
 }
 
 // ------------------------------------------------------------------------------------------------
 // EXTRACTIONS LOCALES (Regex heuristiques 100% Client-Side)
 // ------------------------------------------------------------------------------------------------
 
-function localExtractToolbox(text: string): StudySheet {
+function localExtractToolbox(text: string, subjectId = DEFAULT_SUBJECT_ID): StudySheet {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const title = lines[0]?.substring(0, 80) || 'Fiche de Cours (Extraction Locale)';
   
@@ -422,9 +424,9 @@ function localExtractToolbox(text: string): StudySheet {
 
   return {
     id: `sheet_${Date.now()}`,
-    subjectId: 'meca-flu',
+    subjectId,
     title: title,
-    subtitle: 'Généré en Mode Local Prioritaire (100% Offline)',
+    subtitle: 'Généré en Mode Local (Dernier recours Offline)',
     chapter: 'Extraction Automatique',
     tags: ['Mode Local', 'ESTACA'],
     mastery: 'to_learn',
@@ -502,7 +504,7 @@ function localExtractToolbox(text: string): StudySheet {
   };
 }
 
-function localParseTd(text: string, type: 'td' | 'annale'): Array<TDExercise | AnnaleItem> {
+function localParseTd(text: string, type: 'td' | 'annale', subjectId = DEFAULT_SUBJECT_ID): Array<TDExercise | AnnaleItem> {
   const chunks = text.split(/(?:Exercice|Problème|Partie|Exercice\s*\d+|EXERCICE)/i).filter(c => c.trim().length > 20);
   if (chunks.length === 0) chunks.push(text);
 
@@ -513,7 +515,7 @@ function localParseTd(text: string, type: 'td' | 'annale'): Array<TDExercise | A
 
     const base: TDExercise = {
       id: `exo_${Date.now()}_${idx}`,
-      subjectId: 'meca-flu',
+      subjectId,
       chapter: 'Chapitre Extrait',
       title: title,
       notion: 'Application des lois fondamentales',
@@ -552,7 +554,11 @@ function localParseTd(text: string, type: 'td' | 'annale'): Array<TDExercise | A
 // FONCTIONS PUBLIQUES
 // ------------------------------------------------------------------------------------------------
 
-export async function transformLectureToToolbox(text: string, forceLocal?: boolean): Promise<StudySheet> {
+export async function transformLectureToToolbox(
+  text: string,
+  forceLocal?: boolean,
+  subjectId = DEFAULT_SUBJECT_ID
+): Promise<StudySheet> {
   const systemPrompt = `Tu es un professeur émérite d'école d'ingénieurs aéronautique et automobile (type ESTACA).
 Transforme le cours fourni en une boîte à outils de révision ultra-exhaustive au format JSON.
 
@@ -606,7 +612,7 @@ Structure JSON attendue :
     userPrompt,
     (parsed) => ({
       id: `sheet_${Date.now()}`,
-      subjectId: 'meca-flu',
+      subjectId,
       title: parsed.title || 'Fiche de Révision',
       subtitle: parsed.subtitle || 'Synthèse chirurgicale',
       chapter: parsed.chapter || 'Généralités',
@@ -649,14 +655,15 @@ Structure JSON attendue :
       updatedAt: new Date().toISOString(),
     }),
     forceLocal,
-    () => localExtractToolbox(text)
+    () => localExtractToolbox(text, subjectId)
   );
 }
 
 export async function parseTdDocument(
   text: string,
   type: 'td' | 'annale',
-  forceLocal?: boolean
+  forceLocal?: boolean,
+  subjectId = DEFAULT_SUBJECT_ID
 ): Promise<Array<TDExercise | AnnaleItem>> {
   const isAnnale = type === 'annale';
 
@@ -696,7 +703,7 @@ Format JSON attendu :
       return list.map((item: any, i: number) => {
         const base: TDExercise = {
           id: `exo_${Date.now()}_${i}`,
-          subjectId: 'meca-flu',
+          subjectId,
           chapter: item.chapter || 'Chapitre Général',
           title: item.title || `Exercice ${i + 1}`,
           notion: item.notion || 'Notion clé',
@@ -727,7 +734,7 @@ Format JSON attendu :
       });
     },
     forceLocal,
-    () => localParseTd(text, type)
+    () => localParseTd(text, type, subjectId)
   );
 }
 
