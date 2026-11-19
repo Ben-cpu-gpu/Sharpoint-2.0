@@ -12,8 +12,8 @@ import {
 test('default priority order is strictly Gemini -> Claude -> OpenAI before Local', () => {
   const res = resolveFallbackChain({
     selectedProvider: 'gemini',
-    selectedModel: 'gemini-3.1-pro',
-    configuredKeys: { gemini: true, claude: true, openai: true, groq: false },
+    selectedModel: DEFAULT_MODEL_ID,
+    configuredKeys: { gemini: true, claude: true, openai: true, groq: false, openrouter: false },
   });
 
   assert.equal(res.shouldUseLocalImmediately, false);
@@ -21,48 +21,47 @@ test('default priority order is strictly Gemini -> Claude -> OpenAI before Local
   assert.deepEqual(res.configuredCloudChain, ['gemini', 'claude', 'openai']);
 });
 
-test('includes Groq after Gemini -> Claude -> ChatGPT when Groq key is configured', () => {
+test('includes Groq and OpenRouter free relays after Gemini -> Claude -> ChatGPT when configured', () => {
   const res = resolveFallbackChain({
     selectedProvider: 'gemini',
-    selectedModel: 'gemini-3-flash',
-    configuredKeys: { gemini: true, claude: true, openai: true, groq: true },
+    selectedModel: 'gemini-2.5-flash',
+    configuredKeys: { gemini: true, claude: true, openai: true, groq: true, openrouter: true },
   });
 
-  assert.deepEqual(res.configuredCloudChain, ['gemini', 'claude', 'openai', 'groq']);
+  assert.deepEqual(res.configuredCloudChain, ['gemini', 'claude', 'openai', 'groq', 'openrouter']);
 });
 
 test('skips missing keys while preserving Gemini -> Claude -> ChatGPT precedence', () => {
   const res = resolveFallbackChain({
     selectedProvider: 'gemini',
-    selectedModel: 'gemini-3.1-pro',
-    configuredKeys: { gemini: false, claude: true, openai: true, groq: false },
+    selectedModel: 'gemini-2.5-flash',
+    configuredKeys: { gemini: false, claude: true, openai: true, groq: false, openrouter: true },
   });
 
   assert.equal(res.shouldUseLocalImmediately, false);
-  assert.deepEqual(res.cloudOrder, ['gemini', 'claude', 'openai']);
-  assert.deepEqual(res.configuredCloudChain, ['claude', 'openai']);
+  assert.deepEqual(res.configuredCloudChain, ['claude', 'openai', 'openrouter']);
 });
 
-test('puts explicit Claude or OpenAI choice first while still falling back across remaining cloud providers', () => {
+test('puts explicit Claude, OpenAI, or Groq choice first while still falling back across remaining cloud providers', () => {
   const claudeFirst = resolveFallbackChain({
     selectedProvider: 'claude',
-    selectedModel: 'claude-sonnet-5.5',
+    selectedModel: 'claude-sonnet-4-20250514',
     configuredKeys: { gemini: true, claude: true, openai: true },
   });
   assert.deepEqual(claudeFirst.configuredCloudChain, ['claude', 'gemini', 'openai']);
 
-  const openaiFirst = resolveFallbackChain({
-    selectedProvider: 'openai',
-    selectedModel: 'gpt-5',
-    configuredKeys: { gemini: true, claude: true, openai: true },
+  const groqFirst = resolveFallbackChain({
+    selectedProvider: 'groq',
+    selectedModel: 'llama-3.3-70b-versatile',
+    configuredKeys: { gemini: true, claude: true, openai: true, groq: true },
   });
-  assert.deepEqual(openaiFirst.configuredCloudChain, ['openai', 'gemini', 'claude']);
+  assert.deepEqual(groqFirst.configuredCloudChain, ['groq', 'gemini', 'claude', 'openai']);
 });
 
 test('triggers Mode Local only as last resort via forceLocal or explicit local-fallback selection', () => {
   const forced = resolveFallbackChain({
     selectedProvider: 'gemini',
-    selectedModel: 'gemini-3.1-pro',
+    selectedModel: DEFAULT_MODEL_ID,
     forceLocal: true,
     configuredKeys: { gemini: true, claude: true, openai: true },
   });
@@ -77,9 +76,11 @@ test('triggers Mode Local only as last resort via forceLocal or explicit local-f
   assert.equal(explicitLocal.shouldUseLocalImmediately, true);
 });
 
-test('migrates legacy local-priority stored selection back to Gemini priority #1', () => {
+test('migrates legacy local-priority and legacy model aliases cleanly', () => {
   assert.equal(normalizeStoredModelId(LEGACY_LOCAL_MODEL_ID), DEFAULT_MODEL_ID);
+  assert.equal(normalizeStoredModelId('gemini-2.0-flash'), 'gemini-4-hydrogen');
+  assert.equal(normalizeStoredModelId('gemini-3.1-pro'), 'gemini-2.5-pro');
   assert.equal(normalizeStoredProvider('local', LEGACY_LOCAL_MODEL_ID), 'gemini');
   assert.equal(normalizeStoredProvider('local', LOCAL_FALLBACK_MODEL_ID), 'local');
-  assert.equal(normalizeStoredModelId('claude-sonnet-5.5'), 'claude-sonnet-5.5');
+  assert.equal(normalizeStoredProvider('openrouter', 'deepseek/deepseek-r1-0528:free'), 'openrouter');
 });

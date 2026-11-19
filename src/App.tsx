@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { CosmicBackdrop } from './components/common/CosmicBackdrop';
 import { Header, MainTab } from './components/common/Header';
@@ -6,12 +6,13 @@ import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { ApiKeyModal } from './components/common/ApiKeyModal';
 import { DebugDrawer } from './components/common/DebugDrawer';
 import { IngestionModal } from './components/common/IngestionModal';
+import { SolarSystemNav } from './components/common/SolarSystemNav';
 import { SheetViewer } from './components/sheets/SheetViewer';
 import { SheetEditor } from './components/sheets/SheetEditor';
 import { RevisionModal } from './components/sheets/RevisionModal';
 import { TDSection } from './components/td/TDSection';
 import { AnnalesSection } from './components/annales/AnnalesSection';
-import { StudySheet, TDExercise, AnnaleItem, Subject } from './types/course';
+import { StudySheet, TDExercise, AnnaleItem, ProviderHealthResult } from './types/course';
 import { availableSubjects } from './data/initialData';
 import {
   resolveActiveSheet,
@@ -23,6 +24,13 @@ import {
   exportDataAsJson,
   importDataFromJson,
 } from './services/storageService';
+import {
+  AIProvider,
+  getSelectedProvider,
+  hasKeyForProvider,
+} from './services/apiKeyService';
+import { fetchGeminiServerStatus, testProviderHealth } from './services/aiService';
+import { CloudAIProvider } from './utils/aiFallbackOrder';
 import {
   BookOpen,
   Plus,
@@ -51,12 +59,148 @@ export const App: React.FC = () => {
   const [revisionInitialMode, setRevisionInitialMode] = useState<'flashcards' | 'quiz'>('flashcards');
   const [isIngestionOpen, setIsIngestionOpen] = useState(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [apiModalInitialTab, setApiModalInitialTab] = useState<AIProvider | undefined>(undefined);
+  const [isTestingAll, setIsTestingAll] = useState(false);
+
+  const buildInitialHealthMap = (): Record<AIProvider, ProviderHealthResult> => {
+    const providers: AIProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
+    const map = {} as Record<AIProvider, ProviderHealthResult>;
+    for (const p of providers) {
+      if (p === 'local') {
+        map[p] = {
+          provider: 'local',
+          status: 'ok',
+          latencyMs: 1,
+          statusCode: 200,
+          testedModel: 'Regex Client-Side',
+          message: 'Extraction client-side disponible (4e · dernier recours).',
+        };
+        } else if (p === 'gemini') {
+        map[p] = {
+          provider: p,
+          status: 'untested',
+          message: 'Service Gemini serveur prêt — cliquez sur Tester.',
+        };
+      } else if (hasKeyForProvider(p)) {
+        map[p] = {
+          provider: p,
+          status: 'untested',
+          message: 'Clé présente — cliquez sur Tester pour vérifier l\'API.',
+        };
+      } else {
+        map[p] = {
+          provider: p,
+          status: 'missing',
+          message: 'Aucune clé API configurée.',
+        };
+      }
+    }
+    return map;
+  };
+
+  const [healthMap, setHealthMap] = useState<Record<AIProvider, ProviderHealthResult>>(() =>
+    buildInitialHealthMap()
+  );
+
+  useEffect(() => {
+    let active = true;
+    fetchGeminiServerStatus().then(configured => {
+      if (!active) return;
+      setHealthMap(prev => {
+        if (prev.gemini?.status === 'ok' || prev.gemini?.status === 'testing') {
+          return prev;
+        }
+        return {
+          ...prev,
+          gemini: {
+            provider: 'gemini',
+            status: configured ? 'untested' : 'missing',
+            message: configured
+              ? 'Service Gemini serveur prêt — cliquez sur Tester.'
+              : 'GEMINI_API_KEY non configurée côté serveur (Settings > Secrets).',
+          },
+        };
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleOpenDashboard = (providerTab?: AIProvider) => {
+    setApiModalInitialTab(providerTab);
+    setIsApiKeyModalOpen(true);
+  };
+
+  const handleTestProvider = async (
+    provider: AIProvider,
+    keyOverride?: string,
+    modelOverride?: string
+  ): Promise<ProviderHealthResult> => {
+    setHealthMap(prev => ({
+      ...prev,
+      [provider]: {
+        ...prev[provider],
+        provider,
+        status: 'testing',
+        message: 'Vérification en cours...',
+      },
+    }));
+
+    const result = await testProviderHealth(provider, keyOverride, modelOverride);
+    setHealthMap(prev => ({
+      ...prev,
+      [provider]: result,
+    }));
+    return result;
+  };
+
+  const handleTestAllProviders = async (
+    draftKeys?: Partial<Record<CloudAIProvider, string>>
+  ) => {
+    setIsTestingAll(true);
+    try {
+      const providers: AIProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
+      await Promise.all(
+        providers.map(p => {
+          const override = p === 'local' ? undefined : draftKeys?.[p];
+          return handleTestProvider(p, override);
+        })
+      );
+      showToast('Diagnostic de connectivité des API terminé.');
+    } finally {
+      setIsTestingAll(false);
+    }
+  };
+
+  const refreshHealthStatusesAfterKeyUpdate = () => {
+    setHealthMap(prev => {
+      const next = { ...prev };
+      const cloudProviders: CloudAIProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter'];
+      for (const p of cloudProviders) {
+        if (!hasKeyForProvider(p)) {
+          next[p] = {
+            provider: p,
+            status: 'missing',
+            message: 'Aucune clé API configurée.',
+          };
+        } else if (next[p].status === 'missing') {
+          next[p] = {
+            provider: p,
+            status: 'untested',
+            message: 'Clé enregistrée — prête à être testée.',
+          };
+        }
+      }
+      return next;
+    });
   };
 
   const handleManualSave = () => {
@@ -186,6 +330,25 @@ export const App: React.FC = () => {
     return 'À apprendre';
   };
 
+  const subjectCounts = React.useMemo(() => {
+    const map: Record<string, { sheets: number; td: number; annales: number }> = {};
+    for (const sub of availableSubjects) {
+      map[sub.id] = { sheets: 0, td: 0, annales: 0 };
+    }
+    for (const s of sheets) {
+      if (map[s.subjectId]) map[s.subjectId].sheets += 1;
+    }
+    for (const t of tdExercises) {
+      if (map[t.subjectId]) map[t.subjectId].td += 1;
+    }
+    for (const a of annales) {
+      if (map[a.subjectId]) map[a.subjectId].annales += 1;
+    }
+    return map;
+  }, [sheets, tdExercises, annales]);
+
+  const activeProvider = getSelectedProvider();
+
   return (
     <ErrorBoundary>
       <div className="relative min-h-screen bg-[#04060C] text-slate-100 flex flex-col font-sans pb-20 sm:pb-8">
@@ -196,11 +359,12 @@ export const App: React.FC = () => {
             currentTab={currentTab}
             onTabChange={setCurrentTab}
             onOpenIngest={() => setIsIngestionOpen(true)}
-            onOpenSettings={() => setIsApiKeyModalOpen(true)}
+            onOpenSettings={() => handleOpenDashboard()}
             onManualSave={handleManualSave}
             lastSavedTime={lastSavedTime}
             onExportJson={handleExportJson}
             onImportJson={handleImportJson}
+            activeHealthStatus={healthMap[activeProvider]?.status}
             counts={{
               sheets: sheets.length,
               td: tdExercises.length,
@@ -218,47 +382,27 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-5">
-            {/* Workspace Subject Filter Bar */}
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-white/[0.08]">
-              <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-[#0A0E19] border border-white/[0.08]">
-                <button
-                  type="button"
-                  onClick={() => setSelectedSubjectId('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
-                    selectedSubjectId === 'all'
-                      ? 'bg-amber-500 text-[#04060C]'
-                      : 'text-slate-400 hover:text-slate-100'
-                  }`}
-                >
-                  Toutes matières
-                </button>
-                {availableSubjects.map((sub: Subject) => (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => setSelectedSubjectId(sub.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
-                      selectedSubjectId === sub.id
-                        ? 'bg-amber-500 text-[#04060C]'
-                        : 'text-slate-400 hover:text-slate-100'
-                    }`}
-                  >
-                    {sub.name}
-                  </button>
-                ))}
-              </div>
-
-              <div className="hidden sm:flex items-center gap-3 text-xs text-slate-400 font-mono shrink-0">
-                <span>ESTACA Ingénierie</span>
-                <span aria-hidden="true">·</span>
-                <span>{sheets.length} fiches</span>
-                <span aria-hidden="true">·</span>
-                <span>{tdExercises.length} TD</span>
-                <span aria-hidden="true">·</span>
-                <span>{annales.length} annales</span>
-              </div>
-            </div>
+          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-6">
+            {/* Observatoire Système Solaire + Tableau de Bord IA */}
+            <SolarSystemNav
+              currentTab={currentTab}
+              onTabChange={setCurrentTab}
+              selectedSubjectId={selectedSubjectId}
+              onSelectSubject={setSelectedSubjectId}
+              subjects={availableSubjects}
+              counts={{
+                sheets: sheets.length,
+                td: tdExercises.length,
+                annales: annales.length,
+              }}
+              subjectCounts={subjectCounts}
+              onOpenIngest={() => setIsIngestionOpen(true)}
+              onOpenDashboard={handleOpenDashboard}
+              healthMap={healthMap}
+              onTestProvider={p => handleTestProvider(p)}
+              onTestAllProviders={() => handleTestAllProviders()}
+              isTestingAll={isTestingAll}
+            />
 
             {/* 1. SECTION FICHES DE COURS */}
             {currentTab === 'sheets' && (
@@ -487,7 +631,7 @@ export const App: React.FC = () => {
           currentTab={currentTab}
           onTabChange={setCurrentTab}
           onOpenIngest={() => setIsIngestionOpen(true)}
-          onOpenSettings={() => setIsApiKeyModalOpen(true)}
+          onOpenSettings={() => handleOpenDashboard()}
           counts={{
             sheets: sheets.length,
             td: tdExercises.length,
@@ -497,10 +641,16 @@ export const App: React.FC = () => {
 
         <ApiKeyModal
           isOpen={isApiKeyModalOpen}
+          initialTab={apiModalInitialTab}
           onClose={() => setIsApiKeyModalOpen(false)}
           onKeysUpdated={() => {
+            refreshHealthStatusesAfterKeyUpdate();
             showToast('Paramètres et clés API mis à jour.');
           }}
+          healthMap={healthMap}
+          onTestProvider={handleTestProvider}
+          onTestAllProviders={handleTestAllProviders}
+          isTestingAll={isTestingAll}
         />
 
         {activeSheet && (

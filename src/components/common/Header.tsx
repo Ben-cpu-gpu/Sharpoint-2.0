@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { getSelectedModel, ALL_MODELS, hasActiveKeyForCurrentModel, getSelectedProvider } from '../../services/apiKeyService';
 
+import { ProviderHealthState } from '../../types/course';
+
 export type MainTab = 'sheets' | 'td' | 'annales';
 
 interface HeaderProps {
@@ -23,6 +25,7 @@ interface HeaderProps {
   lastSavedTime: string | null;
   onExportJson: () => void;
   onImportJson: (file: File) => void;
+  activeHealthStatus?: ProviderHealthState;
   counts: {
     sheets: number;
     td: number;
@@ -39,6 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
   lastSavedTime,
   onExportJson,
   onImportJson,
+  activeHealthStatus,
   counts,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -151,11 +155,23 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenSettings}
-            aria-label="Configurer le modèle IA et les clés API"
+            aria-label="Ouvrir le Tableau de Bord IA et les clés API"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-white/[0.1] text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
           >
             <Key className={`w-3.5 h-3.5 ${isKeyConfigured || currentProvider === 'local' ? 'text-amber-400' : 'text-sky-400'}`} />
-            <span className="hidden md:inline max-w-[130px] truncate">{modelDisplayName}</span>
+            <span className="hidden md:inline max-w-[135px] truncate">{modelDisplayName}</span>
+            <span
+              aria-hidden="true"
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                activeHealthStatus === 'ok'
+                  ? 'bg-emerald-400'
+                  : activeHealthStatus === 'error'
+                  ? 'bg-rose-400'
+                  : isKeyConfigured || currentProvider === 'local'
+                  ? 'bg-sky-400'
+                  : 'bg-slate-500'
+              }`}
+            />
             <ChevronDown className="w-3 h-3 text-slate-400" />
           </button>
 

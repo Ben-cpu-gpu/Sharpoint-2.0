@@ -70,7 +70,7 @@ export const DebugDrawer: React.FC = () => {
                     Console d'Inspection & Résilience IA
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Traçabilité des appels Gemini, Claude, ChatGPT, Groq et Mode Local
+                    Traçabilité des appels Gemini, Claude, ChatGPT, Groq, OpenRouter et Mode Local
                   </p>
                 </div>
               </div>

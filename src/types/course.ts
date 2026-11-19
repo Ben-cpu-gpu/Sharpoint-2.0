@@ -82,12 +82,24 @@ export interface AnnaleItem extends TDExercise {
 export interface DebugLog {
   id: string;
   timestamp: string;
-  apiProvider: 'Gemini' | 'Claude' | 'OpenAI' | 'Groq' | 'Local';
+  apiProvider: 'Gemini' | 'Claude' | 'OpenAI' | 'Groq' | 'OpenRouter' | 'Local';
   model: string;
   status: 'success' | 'error';
   statusCode?: number;
   message: string;
   rawPayload?: string;
+}
+
+export type ProviderHealthState = 'untested' | 'testing' | 'ok' | 'error' | 'missing';
+
+export interface ProviderHealthResult {
+  provider: 'gemini' | 'claude' | 'openai' | 'groq' | 'openrouter' | 'local';
+  status: ProviderHealthState;
+  latencyMs?: number;
+  statusCode?: number;
+  testedModel?: string;
+  message: string;
+  checkedAt?: string;
 }
 
 export interface Subject {

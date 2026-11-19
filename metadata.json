@@ -1,0 +1,8 @@
+{
+  "name": "FicheMaster IA",
+  "description": "Assistant de révision scientifique ESTACA : fiches de cours, TD, annales et diagnostics IA avec navigation en Système Solaire.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
