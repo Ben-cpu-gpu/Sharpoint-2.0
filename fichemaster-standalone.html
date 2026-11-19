@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>FicheMaster IA | Gemini 3, Claude 5.5 & GPT-5 • ESTACA</title>
+  
+  <!-- Mobile PWA & iOS Safari meta tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FicheMaster IA">
+  <meta name="theme-color" content="#131314">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- KaTeX CSS & JS for LaTeX equations -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/contrib/auto-render.min.js"></script>
+
+  <!-- pdf.js CDN for client-side PDF parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <!-- React 18 & Babel for in-browser standalone execution -->
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background-color: #131314; 
+      color: #e3e3e3; 
+      -webkit-tap-highlight-color: transparent;
+    }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.5rem 0; margin: 0.5rem 0 !important; }
+    .latex-focus .katex { font-size: 1.35em !important; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(19, 19, 20, 0.8); }
+    ::-webkit-scrollbar-thumb { background: rgba(142, 145, 143, 0.3); border-radius: 9999px; }
+    .safe-area-pb { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.6rem); }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-blue-600 selection:text-white pb-16 sm:pb-0">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const MODELS_CATALOG = [
+      { id: 'gemini-3.1-pro', provider: 'gemini', name: 'Gemini 3 Pro (Notebook IA)', badge: 'Gemini 3' },
+      { id: 'gemini-3-flash', provider: 'gemini', name: 'Gemini 3 Flash', badge: 'Gemini 3' },
+      { id: 'claude-sonnet-5.5', provider: 'claude', name: 'Claude Sonnet 5.5', badge: 'Claude 5.5' },
+      { id: 'claude-haiku-5.5', provider: 'claude', name: 'Claude Haiku 5.5', badge: 'Claude 5.5' },
+      { id: 'gpt-5', provider: 'openai', name: 'ChatGPT GPT-5', badge: 'GPT-5' },
+      { id: 'local-priority', provider: 'local', name: 'Mode Local Prioritaire', badge: '100% Offline' }
+    ];
+
+    function MathView({ math, children, block = false }) {
+      const text = math || children || '';
+      const ref = useRef(null);
+
+      useEffect(() => {
+        if (!ref.current) return;
+        try {
+          const trimmed = text.trim();
+          if (block || (trimmed.startsWith('$$') && trimmed.endsWith('$$'))) {
+            const clean = trimmed.startsWith('$$') && trimmed.endsWith('$$') ? trimmed.slice(2, -2) : trimmed;
+            katex.render(clean, ref.current, { displayMode: true, throwOnError: false });
+          } else if (text.includes('$')) {
+            ref.current.innerHTML = text;
+            renderMathInElement(ref.current, {
+              delimiters: [
+                { left: '$$', right: '$$', display: true },
+                { left: '$', right: '$', display: false }
+              ],
+              throwOnError: false
+            });
+          } else if (/[\\[\]{}^_+=]/.test(text)) {
+            katex.render(text, ref.current, { displayMode: block, throwOnError: false });
+          } else {
+            ref.current.textContent = text;
+          }
+        } catch (e) {
+          ref.current.textContent = text;
+        }
+      }, [text, block]);
+
+      return <span ref={ref} className="select-text leading-relaxed" />;
+    }
+
+    function App() {
+      const initialSheets = [
+        {
+          id: 'sheet_mecaflu_01',
+          subjectId: 'meca-flu',
+          title: 'Théorème de Bernoulli & Écoulements Parfaits',
+          subtitle: 'Lois de conservation dans un tube de courant stationnaire',
+          chapter: 'Dynamique des fluides incompressibles',
+          tags: ['Aérodynamique', 'ESTACA 3A', 'Examen'],
+          mastery: 'learning',
+          theorems: [
+            {
+              id: 'thm_1',
+              name: 'Théorème de Bernoulli (Forme Énergétique)',
+              statement: 'P + \\frac{1}{2}\\rho v^2 + \\rho g z = \\text{Constante le long d\'une ligne de courant}',
+              strictConditions: [
+                'Écoulement stationnaire (d/dt = 0)',
+                'Fluide incompressible (rho = cste)',
+                'Fluide parfait non visqueux (mu = 0)',
+                'Le long d\'une même ligne de courant'
+              ],
+              professorTip: 'Toujours expliciter les 4 hypothèses dans les 2 premières lignes de votre copie ESTACA.'
+            }
+          ],
+          magicFormulas: [
+            {
+              id: 'fml_1',
+              name: 'Pression Dynamique de Stagnation',
+              formula: 'q = \\frac{1}{2} \\rho v^2',
+              unitsAndVariables: 'q : Pression en Pascal [Pa], rho : masse volumique [kg/m³], v : vitesse [m/s].',
+              validityDomain: 'Nombre de Mach Ma < 0.3'
+            },
+            {
+              id: 'fml_2',
+              name: 'Nombre de Reynolds',
+              formula: 'Re = \\frac{\\rho v L}{\\mu} = \\frac{v L}{\\nu}',
+              unitsAndVariables: 'Re : sans dimension [-], rho : [kg/m³], v : [m/s], L : [m], mu : viscosité dynamique [Pa·s].',
+              validityDomain: 'Détermine la transition laminaire / turbulent.'
+            }
+          ],
+          stepByStepMethods: [
+            {
+              id: 'mth_1',
+              goal: 'Calcul de la vitesse anémométrique via sonde Pitot',
+              steps: [
+                '1. Poser les deux points : amont (1) et point d\'arrêt (2).',
+                '2. Écrire Bernoulli : P_1 + 1/2 rho v_1^2 = P_2 (v_2 = 0).',
+                '3. Isoler la vitesse : v_1 = sqrt(2 * (P_t - P_s) / rho).',
+                '4. Application numérique avec rho = 1.225 kg/m³.'
+              ],
+              trapToAvoid: 'Ne confondez pas pression statique et totale. P_t - P_s est toujours > 0.'
+            }
+          ],
+          examTraps: [
+            'Appliquer Bernoulli à travers une pompe sans ajouter le terme de travail massique w_i.',
+            'Confondre la masse volumique de l\'air (1.225 kg/m³) et de l\'eau (1000 kg/m³).'
+          ],
+          flashcards: [
+            { id: 'fc_1', question: 'Quelles sont les 4 conditions strictes de Bernoulli ?', answer: 'Stationnaire, Incompressible, Fluide parfait non visqueux, Le long d\'une même ligne de courant.' },
+            { id: 'fc_2', question: 'Quelle est la masse volumique de l\'air au niveau de la mer (ISA) ?', answer: '1.225 kg/m³ (à 15°C et 101 325 Pa).' }
+          ],
+          quiz: [
+            {
+              id: 'qz_1',
+              question: 'Delta P = 1175 Pa dans une sonde Pitot (rho = 1.225 kg/m³). Quelle est la vitesse ?',
+              options: ['v = 43.8 m/s', 'v = 31.0 m/s', 'v = 62.4 m/s', 'v = 98.2 m/s'],
+              correctIndex: 0,
+              explanation: 'v = sqrt(2 * 1175 / 1.225) = sqrt(1918.36) = 43.8 m/s (~158 km/h).'
+            }
+          ]
+        }
+      ];
+
+      const initialTd = [
+        {
+          id: 'td_1',
+          subjectId: 'meca-flu',
+          chapter: 'Théorème d\'Euler',
+          title: 'Effort de poussée sur l\'aube d\'une turbomachine',
+          notion: 'Bilan de quantité de mouvement',
+          difficulty: 2,
+          statement: 'Un jet d\'air de section $S = 0.02\\text{ m}^2$, $V_1 = 150\\text{ m/s}$, $\\rho = 1.225\\text{ kg/m}^3$ est dévié de $60^\\circ$ par une aube fixe.\nCalculer la force totale exercée par le fluide sur l\'aube.',
+          hints: ['Utilisez le théorème d\'Euler : Somme F_ext = Q_m * (V_out - V_in).', 'Le débit massique vaut Q_m = rho * S * V = 3.675 kg/s.'],
+          solution: '1. Projection selon x et y.\n2. R_x = Q_m * V_1 * (1 - cos 60°) = 275.6 N.\n3. R_y = - Q_m * V_1 * sin 60° = -477.4 N.\n4. Norme totale = sqrt(R_x² + R_y²) = 551.3 N.',
+          status: 'in_progress'
+        }
+      ];
+
+      const initialAnnales = [
+        {
+          id: 'annale_1',
+          subjectId: 'meca-flu',
+          chapter: 'Aérodynamique',
+          title: 'Examen Final ESTACA 2024 - Vol de croisière & Traînée induite',
+          notion: 'Profil NACA 0012 et formule de portance',
+          difficulty: 3,
+          session: 'Session Principale Janvier',
+          year: 2024,
+          durationMinutes: 120,
+          points: 20,
+          gradingCriteria: [
+            'Calcul rigoureux de rho = 0.9756 kg/m³ : 3 pts',
+            'Conversion d\'angle et portance Cz = 2*pi*alpha : 4 pts',
+            'Portance globale Fz = 213.6 kN : 5 pts',
+            'Traînée induite Cxi = Cz² / (pi * Lambda) : 5 pts',
+            'Finesse et respect des unités SI : 3 pts'
+          ],
+          statement: 'Avion volant à V = 180 m/s à altitude P = 70 kPa, T = 250 K. Envergure b = 14 m, corde c = 2.2 m, calage alpha = 4°.\nCalculer la portance totale et la traînée induite.',
+          hints: ['Convertir 4° en radians (4 * pi / 180 = 0.0698 rad).', 'Cz = 2 * pi * 0.0698 = 0.4386.'],
+          solution: '1. rho = P / (r*T) = 70000 / (287*250) = 0.9756 kg/m³.\n2. Surface alaire S = 14 * 2.2 = 30.8 m².\n3. Portance Fz = 1/2 * rho * S * V² * Cz = 213.6 kN.\n4. Allongement Lambda = b² / S = 6.364. Traînée induite = 4.69 kN.',
+          status: 'todo'
+        }
+      ];
+
+      const [sheets, setSheets] = useState(() => {
+        const raw = localStorage.getItem('fichemaster_sheets_v1');
+        return raw ? JSON.parse(raw) : initialSheets;
+      });
+      const [tdList, setTdList] = useState(() => {
+        const raw = localStorage.getItem('fichemaster_td_v1');
+        return raw ? JSON.parse(raw) : initialTd;
+      });
+      const [annalesList, setAnnalesList] = useState(() => {
+        const raw = localStorage.getItem('fichemaster_annales_v1');
+        return raw ? JSON.parse(raw) : initialAnnales;
+      });
+      const [lastSaved, setLastSaved] = useState(() => localStorage.getItem('fichemaster_last_saved'));
+
+      const [currentTab, setCurrentTab] = useState('sheets');
+      const [activeSheetId, setActiveSheetId] = useState(sheets[0]?.id || '');
+      const [focusLatex, setFocusLatex] = useState(false);
+      const [activeRecall, setActiveRecall] = useState(false);
+      const [revealedItems, setRevealedItems] = useState({});
+
+      // Modèles Multi-IA (Gemini 3, Claude 5.5, GPT-5, Local)
+      const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('fichemaster_selected_model') || 'gemini-3.1-pro');
+      const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('fichemaster_gemini_api_key') || '');
+      const [claudeKey, setClaudeKey] = useState(() => localStorage.getItem('fichemaster_anthropic_api_key') || '');
+      const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('fichemaster_openai_api_key') || '');
+      const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+      // Modales & Chronomètre
+      const [isTimerOpen, setIsTimerOpen] = useState(false);
+      const [timerAnnale, setTimerAnnale] = useState(null);
+      const [timerRemaining, setTimerRemaining] = useState(120 * 60);
+      const [isTimerRunning, setIsTimerRunning] = useState(false);
+      const [isRevisionOpen, setIsRevisionOpen] = useState(false);
+      const [revisionMode, setRevisionMode] = useState('flashcards');
+
+      const handleSave = () => {
+        const time = new Date().toLocaleTimeString('fr-FR');
+        localStorage.setItem('fichemaster_sheets_v1', JSON.stringify(sheets));
+        localStorage.setItem('fichemaster_td_v1', JSON.stringify(tdList));
+        localStorage.setItem('fichemaster_annales_v1', JSON.stringify(annalesList));
+        localStorage.setItem('fichemaster_last_saved', time);
+        setLastSaved(time);
+      };
+
+      const handleSaveSettings = (e) => {
+        e.preventDefault();
+        localStorage.setItem('fichemaster_selected_model', selectedModel);
+        if (geminiKey) localStorage.setItem('fichemaster_gemini_api_key', geminiKey.trim());
+        if (claudeKey) localStorage.setItem('fichemaster_anthropic_api_key', claudeKey.trim());
+        if (openaiKey) localStorage.setItem('fichemaster_openai_api_key', openaiKey.trim());
+        setIsSettingsOpen(false);
+      };
+
+      useEffect(() => {
+        let int = null;
+        if (isTimerRunning && timerRemaining > 0) {
+          int = setInterval(() => setTimerRemaining(prev => prev - 1), 1000);
+        }
+        return () => clearInterval(int);
+      }, [isTimerRunning, timerRemaining]);
+
+      const activeSheet = sheets.find(s => s.id === activeSheetId) || sheets[0];
+      const activeModelObj = MODELS_CATALOG.find(m => m.id === selectedModel) || MODELS_CATALOG[0];
+
+      return (
+        <div className={`min-h-screen flex flex-col ${focusLatex ? 'latex-focus' : ''}`}>
+          {/* HEADER GOOGLE AI STUDIO / GEMINI NOTEBOOK */}
+          <header className="sticky top-0 z-30 bg-[#131314]/90 border-b border-[#282a2c] backdrop-blur-md px-4 py-2.5">
+            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-500 via-indigo-500 to-pink-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/20">
+                  ✨
+                </div>
+                <div>
+                  <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-white flex items-center gap-1.5">
+                    Gemini Notebook <span className="text-[#8e918f] font-normal hidden sm:inline">•</span> <span className="text-blue-400">FicheMaster</span>
+                  </h1>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Pillule Modèle Actif */}
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#1e1f20] border border-[#37393b] text-xs text-[#e3e3e3]"
+                  title="Changer de modèle"
+                >
+                  <span className={`w-2 h-2 rounded-full ${
+                    activeModelObj.provider === 'local' ? 'bg-amber-400' :
+                    activeModelObj.provider === 'claude' ? 'bg-purple-400' :
+                    activeModelObj.provider === 'openai' ? 'bg-emerald-400' : 'bg-blue-400'
+                  }`}></span>
+                  <span className="font-mono text-[11px] font-semibold">{activeModelObj.badge}</span>
+                </button>
+
+                {/* Bouton Clé API */}
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className="px-2.5 py-1 rounded-xl text-xs font-semibold border bg-blue-600/20 text-blue-300 border-blue-500/40"
+                >
+                  🔑 Modèles & Clés
+                </button>
+
+                {/* Sauvegarde */}
+                <button
+                  onClick={handleSave}
+                  className="px-3 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20 active:scale-95"
+                >
+                  💾 {lastSaved ? `Sauvé ${lastSaved}` : 'Sauvegarder'}
+                </button>
+              </div>
+            </div>
+
+            {/* Desktop Navigation Tabs */}
+            <div className="max-w-7xl mx-auto hidden sm:flex gap-2 pt-2.5 border-t border-[#282a2c] mt-2">
+              <button
+                onClick={() => setCurrentTab('sheets')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold ${currentTab === 'sheets' ? 'bg-blue-600 text-white' : 'text-[#8e918f] hover:text-white'}`}
+              >
+                📖 Fiches de Cours ({sheets.length})
+              </button>
+              <button
+                onClick={() => setCurrentTab('td')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold ${currentTab === 'td' ? 'bg-blue-600 text-white' : 'text-[#8e918f] hover:text-white'}`}
+              >
+                🧮 Exercices & TD ({tdList.length})
+              </button>
+              <button
+                onClick={() => setCurrentTab('annales')}
+                className={`px-3 py-1 rounded-lg text-xs font-bold ${currentTab === 'annales' ? 'bg-blue-600 text-white' : 'text-[#8e918f] hover:text-white'}`}
+              >
+                🏆 Annales d'Examens ({annalesList.length})
+              </button>
+            </div>
+          </header>
+
+          {/* MAIN WORKSPACE */}
+          <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6">
+            {/* ONGLET 1 : FICHES */}
+            {currentTab === 'sheets' && activeSheet && (
+              <div className="space-y-5">
+                <div className="bg-[#1e1f20] border border-[#282a2c] rounded-2xl p-5 shadow-xl flex flex-col sm:flex-row justify-between gap-4">
+                  <div>
+                    <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded font-semibold">
+                      {activeSheet.chapter}
+                    </span>
+                    <h2 className="text-xl font-black text-white mt-2">{activeSheet.title}</h2>
+                    <p className="text-xs text-[#8e918f] mt-1">{activeSheet.subtitle}</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setFocusLatex(!focusLatex)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${focusLatex ? 'bg-blue-600 border-blue-500 text-white' : 'bg-[#131314] border-[#37393b] text-[#c4c7c5]'}`}
+                    >
+                      🔍 Focus LaTeX
+                    </button>
+                    <button
+                      onClick={() => setActiveRecall(!activeRecall)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border ${activeRecall ? 'bg-amber-600 border-amber-500 text-white' : 'bg-[#131314] border-[#37393b] text-[#c4c7c5]'}`}
+                    >
+                      👁️ Active Recall
+                    </button>
+                    <button
+                      onClick={() => { setRevisionMode('flashcards'); setIsRevisionOpen(true); }}
+                      className="px-3 py-1.5 rounded-xl bg-blue-950/60 border border-blue-700/50 text-blue-300 text-xs font-bold"
+                    >
+                      ⚡ Flashcards ({activeSheet.flashcards.length})
+                    </button>
+                    <button
+                      onClick={() => { setRevisionMode('quiz'); setIsRevisionOpen(true); }}
+                      className="px-3 py-1.5 rounded-xl bg-purple-950/60 border border-purple-700/50 text-purple-300 text-xs font-bold"
+                    >
+                      🎯 Quiz ({activeSheet.quiz.length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Théorèmes */}
+                <div className="space-y-3">
+                  <h3 className="font-bold text-xs text-blue-400 uppercase tracking-wider">
+                    Théorèmes Fondamentaux & Hypothèses Indispensables
+                  </h3>
+                  {activeSheet.theorems.map(thm => (
+                    <div key={thm.id} className="bg-[#1e1f20] border border-[#282a2c] rounded-2xl p-5 shadow-lg space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-bold text-sm text-blue-300">{thm.name}</h4>
+                        {activeRecall && (
+                          <button
+                            onClick={() => setRevealedItems(p => ({ ...p, [thm.id]: !p[thm.id] }))}
+                            className="text-xs text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded"
+                          >
+                            {revealedItems[thm.id] ? 'Masquer' : 'Révéler'}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="p-3 bg-[#131314] rounded-xl text-center border border-[#282a2c]">
+                        {activeRecall && !revealedItems[thm.id] ? (
+                          <span className="text-xs text-[#8e918f] italic">[Active Recall : récitez la formule de tête]</span>
+                        ) : (
+                          <MathView math={thm.statement} block />
+                        )}
+                      </div>
+
+                      {(!activeRecall || revealedItems[thm.id]) && (
+                        <div>
+                          <p className="text-xs font-bold text-[#8e918f] mb-1">Hypothèses indispensables :</p>
+                          <ul className="text-xs space-y-1 text-[#c4c7c5]">
+                            {thm.strictConditions.map((c, i) => (
+                              <li key={i} className="flex gap-2"><span className="text-blue-400">•</span><MathView>{c}</MathView></li>
+                            ))}
+                          </ul>
+                          {thm.professorTip && (
+                            <p className="mt-2 text-xs text-blue-200 bg-blue-950/30 p-2 rounded-lg border border-blue-900/40">
+                              <strong>Conseil Prof ESTACA :</strong> {thm.professorTip}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Formules Magiques */}
+                <div className="space-y-3">
+                  <h3 className="font-bold text-xs text-indigo-400 uppercase tracking-wider">
+                    Formules Magiques & 100% Unités SI
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activeSheet.magicFormulas.map(fml => (
+                      <div key={fml.id} className="bg-[#1e1f20] border border-[#282a2c] rounded-2xl p-5 space-y-3">
+                        <h4 className="font-bold text-sm text-indigo-300">{fml.name}</h4>
+                        <div className="p-3 bg-[#131314] rounded-xl text-center border border-[#282a2c]">
+                          <MathView math={fml.formula} block />
+                        </div>
+                        <p className="text-xs text-[#c4c7c5]">
+                          <strong>Unités SI :</strong> <MathView>{fml.unitsAndVariables}</MathView>
+                        </p>
+                        <p className="text-xs text-[#8e918f]">
+                          <strong>Validité :</strong> {fml.validityDomain}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ONGLET 2 : TD */}
+            {currentTab === 'td' && (
+              <div className="space-y-4">
+                {tdList.map(exo => (
+                  <div key={exo.id} className="bg-[#1e1f20] border border-[#282a2c] rounded-2xl p-5 shadow-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded font-semibold">
+                        {exo.chapter} • Difficulté {exo.difficulty}/3
+                      </span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-[#131314] text-[#c4c7c5]">
+                        {exo.status === 'in_progress' ? 'En cours' : exo.status === 'completed' ? 'Résolu ✓' : 'À faire'}
+                      </span>
+                    </div>
+                    <h3 className="font-bold text-base text-white">{exo.title}</h3>
+                    <div className="text-xs bg-[#131314] p-4 rounded-xl border border-[#282a2c] leading-relaxed">
+                      <MathView math={exo.statement} />
+                    </div>
+
+                    <button
+                      onClick={() => setRevealedItems(p => ({ ...p, [exo.id]: !p[exo.id] }))}
+                      className="w-full py-2 rounded-xl bg-[#282a2c] hover:bg-[#37393b] text-xs font-bold text-[#e3e3e3]"
+                    >
+                      {revealedItems[exo.id] ? 'Masquer la correction' : 'Révéler la correction détaillée'}
+                    </button>
+
+                    {revealedItems[exo.id] && (
+                      <div className="p-4 bg-[#131314] border border-emerald-900/40 rounded-xl text-xs space-y-2">
+                        <MathView math={exo.solution} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ONGLET 3 : ANNALES */}
+            {currentTab === 'annales' && (
+              <div className="space-y-4">
+                {annalesList.map(annale => (
+                  <div key={annale.id} className="bg-[#1e1f20] border border-[#282a2c] rounded-2xl p-5 shadow-xl space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded font-bold">
+                          {annale.session} • {annale.year}
+                        </span>
+                        <span className="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-bold">
+                          {annale.points} points
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setTimerAnnale(annale);
+                          setTimerRemaining((annale.durationMinutes || 120) * 60);
+                          setIsTimerRunning(false);
+                          setIsTimerOpen(true);
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold text-xs shadow-md shadow-blue-600/30 flex items-center gap-1.5"
+                      >
+                        ⏱️ Mode Examen ({annale.durationMinutes} min)
+                      </button>
+                    </div>
+
+                    <h3 className="text-base font-bold text-white">{annale.title}</h3>
+
+                    <div className="p-3 bg-blue-950/20 border border-blue-900/30 rounded-xl text-xs space-y-1">
+                      <p className="font-bold text-blue-300">Barème Officiel ESTACA :</p>
+                      {annale.gradingCriteria.map((c, idx) => (
+                        <p key={idx} className="text-blue-200">🎯 <MathView>{c}</MathView></p>
+                      ))}
+                    </div>
+
+                    <div className="text-xs bg-[#131314] p-4 rounded-xl border border-[#282a2c] leading-relaxed">
+                      <MathView math={annale.statement} />
+                    </div>
+
+                    <button
+                      onClick={() => setRevealedItems(p => ({ ...p, [annale.id]: !p[annale.id] }))}
+                      className="w-full py-2 rounded-xl bg-[#282a2c] hover:bg-[#37393b] text-xs font-bold text-[#e3e3e3]"
+                    >
+                      {revealedItems[annale.id] ? 'Masquer le corrigé officiel' : 'Révéler le corrigé officiel pas à pas'}
+                    </button>
+
+                    {revealedItems[annale.id] && (
+                      <div className="p-4 bg-[#131314] border border-emerald-900/40 rounded-xl text-xs space-y-2">
+                        <MathView math={annale.solution} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </main>
+
+          {/* BARRE MOBILE SMARTPHONE */}
+          <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#131314]/95 border-t border-[#282a2c] backdrop-blur-xl px-2 py-1 flex items-center justify-around shadow-2xl safe-area-pb">
+            <button
+              onClick={() => setCurrentTab('sheets')}
+              className={`flex flex-col items-center py-1 px-3 ${currentTab === 'sheets' ? 'text-blue-400 font-bold' : 'text-[#8e918f]'}`}
+            >
+              <span className="text-lg">📖</span>
+              <span className="text-[10px]">Fiches</span>
+            </button>
+            <button
+              onClick={() => setCurrentTab('td')}
+              className={`flex flex-col items-center py-1 px-3 ${currentTab === 'td' ? 'text-blue-400 font-bold' : 'text-[#8e918f]'}`}
+            >
+              <span className="text-lg">🧮</span>
+              <span className="text-[10px]">TD</span>
+            </button>
+            <button
+              onClick={() => setCurrentTab('annales')}
+              className={`flex flex-col items-center py-1 px-3 ${currentTab === 'annales' ? 'text-blue-400 font-bold' : 'text-[#8e918f]'}`}
+            >
+              <span className="text-lg">🏆</span>
+              <span className="text-[10px]">Annales</span>
+            </button>
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex flex-col items-center py-1 px-3 text-[#8e918f]"
+            >
+              <span className="text-lg">⚙️</span>
+              <span className="text-[10px]">Studio</span>
+            </button>
+          </nav>
+
+          {/* MODALE RÉGLAGES MULTI-IA (Gemini 3, Claude 5.5, GPT-5, Local) */}
+          {isSettingsOpen && (
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+              <div className="bg-[#1e1f20] border border-[#37393b] rounded-3xl p-6 max-w-md w-full space-y-4">
+                <div className="flex justify-between items-center border-b border-[#282a2c] pb-3">
+                  <h3 className="font-bold text-sm text-white flex items-center gap-2">
+                    <span>✨</span> Choix du Modèle d'IA
+                  </h3>
+                  <button onClick={() => setIsSettingsOpen(false)} className="text-[#8e918f] hover:text-white">✕</button>
+                </div>
+
+                <form onSubmit={handleSaveSettings} className="space-y-4 text-xs">
+                  <div>
+                    <label className="block font-semibold text-[#e3e3e3] mb-1.5">
+                      Moteur actif (Gemini 3, Claude 5.5, GPT-5, Local) :
+                    </label>
+                    <select
+                      value={selectedModel}
+                      onChange={e => setSelectedModel(e.target.value)}
+                      className="w-full bg-[#131314] border border-[#37393b] rounded-xl p-2.5 text-white font-medium"
+                    >
+                      {MODELS_CATALOG.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} [{m.badge}]
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedModel.startsWith('gemini') && (
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="font-semibold text-blue-300">Clé API Google Gemini :</label>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-400 underline text-[11px]">
+                          Obtenir clé gratuite
+                        </a>
+                      </div>
+                      <input
+                        type="password"
+                        value={geminiKey}
+                        onChange={e => setGeminiKey(e.target.value)}
+                        placeholder="Collez votre clé AIzaSy..."
+                        className="w-full bg-[#131314] border border-[#37393b] rounded-xl p-2.5 text-white font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {selectedModel.startsWith('claude') && (
+                    <div>
+                      <label className="block font-semibold text-purple-300 mb-1">Clé API Anthropic Claude :</label>
+                      <input
+                        type="password"
+                        value={claudeKey}
+                        onChange={e => setClaudeKey(e.target.value)}
+                        placeholder="Collez votre clé sk-ant-..."
+                        className="w-full bg-[#131314] border border-[#37393b] rounded-xl p-2.5 text-white font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {selectedModel.startsWith('gpt') && (
+                    <div>
+                      <label className="block font-semibold text-emerald-300 mb-1">Clé API OpenAI ChatGPT :</label>
+                      <input
+                        type="password"
+                        value={openaiKey}
+                        onChange={e => setOpenaiKey(e.target.value)}
+                        placeholder="Collez votre clé sk-proj-..."
+                        className="w-full bg-[#131314] border border-[#37393b] rounded-xl p-2.5 text-white font-mono"
+                      />
+                    </div>
+                  )}
+
+                  {selectedModel === 'local-priority' && (
+                    <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-xl text-amber-200 text-[11px]">
+                      <strong>Mode Local Prioritaire :</strong> 100% exécuté dans le navigateur sans aucune clé ni requête réseau.
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-[#282a2c]">
+                    <button
+                      type="button"
+                      onClick={() => setIsSettingsOpen(false)}
+                      className="px-4 py-2 rounded-xl bg-[#282a2c] text-[#e3e3e3]"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold"
+                    >
+                      Appliquer
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* CHRONOMÈTRE D'EXAMEN MODAL */}
+          {isTimerOpen && timerAnnale && (
+            <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-[#1e1f20] border border-[#37393b] rounded-3xl p-6 max-w-sm w-full text-center space-y-4">
+                <div className="flex justify-between items-center border-b border-[#282a2c] pb-2">
+                  <span className="text-xs text-blue-400 font-bold uppercase">Chronomètre Examen</span>
+                  <button onClick={() => setIsTimerOpen(false)} className="text-[#8e918f] hover:text-white">✕</button>
+                </div>
+                <h4 className="text-xs text-[#e3e3e3] font-bold">{timerAnnale.title}</h4>
+                <div className="text-5xl font-mono font-black text-white p-4 bg-[#131314] rounded-2xl border border-[#282a2c]">
+                  {Math.floor(timerRemaining / 3600).toString().padStart(2, '0')}:
+                  {Math.floor((timerRemaining % 3600) / 60).toString().padStart(2, '0')}:
+                  {(timerRemaining % 60).toString().padStart(2, '0')}
+                </div>
+                <div className="flex justify-center gap-2">
+                  <button
+                    onClick={() => setIsTimerRunning(!isTimerRunning)}
+                    className="px-5 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs"
+                  >
+                    {isTimerRunning ? 'Pause' : 'Démarrer'}
+                  </button>
+                  <button
+                    onClick={() => setTimerRemaining((timerAnnale.durationMinutes || 120) * 60)}
+                    className="px-3 py-2 rounded-xl bg-[#282a2c] text-[#c4c7c5] text-xs"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
