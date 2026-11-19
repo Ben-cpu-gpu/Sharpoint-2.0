@@ -1,22 +1,22 @@
 import React, { useState } from 'react';
-import { 
-  Sparkles, 
-  BrainCircuit, 
-  Eye, 
-  EyeOff, 
-  ZoomIn, 
-  Edit3, 
-  CheckCircle, 
-  AlertTriangle, 
-  BookMarked, 
-  HelpCircle, 
-  GraduationCap, 
-  PlusCircle, 
-  Loader2 
+import {
+  Sparkles,
+  BrainCircuit,
+  Eye,
+  EyeOff,
+  ZoomIn,
+  Edit3,
+  CheckCircle,
+  AlertTriangle,
+  BookMarked,
+  GraduationCap,
+  PlusCircle,
+  Loader2,
 } from 'lucide-react';
 import { StudySheet, MasteryLevel } from '../../types/course';
 import { MathView } from '../common/MathView';
 import { generateNotion } from '../../services/aiService';
+import blackHoleHorizonImg from '../../assets/images/black_hole_horizon_1795123594249.jpg';
 
 interface SheetViewerProps {
   sheet: StudySheet;
@@ -35,8 +35,8 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
   const [activeRecall, setActiveRecall] = useState(false);
   const [revealedItems, setRevealedItems] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<'all' | 'theorems' | 'formulas' | 'methods' | 'traps'>('all');
-  
-  // État d'enrichissement IA ponctuel
+  const [imgFailed, setImgFailed] = useState(false);
+
   const [isAddingNotion, setIsAddingNotion] = useState(false);
   const [notionType, setNotionType] = useState<'theorem' | 'formula' | 'method' | 'trap'>('formula');
   const [notionPrompt, setNotionPrompt] = useState('');
@@ -71,9 +71,11 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
             id: `thm_${Date.now()}`,
             name: result.name || 'Nouveau Théorème',
             statement: result.statement || '',
-            strictConditions: Array.isArray(result.strictConditions) ? result.strictConditions : [result.strictConditions || ''],
+            strictConditions: Array.isArray(result.strictConditions)
+              ? result.strictConditions
+              : [result.strictConditions || ''],
             professorTip: result.professorTip,
-          }
+          },
         ];
       } else if (notionType === 'formula') {
         updated.magicFormulas = [
@@ -84,7 +86,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
             formula: result.formula || '',
             unitsAndVariables: result.unitsAndVariables || 'Unités SI',
             validityDomain: result.validityDomain || '',
-          }
+          },
         ];
       } else if (notionType === 'method') {
         updated.stepByStepMethods = [
@@ -94,7 +96,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
             goal: result.goal || 'Nouvelle Méthode',
             steps: Array.isArray(result.steps) ? result.steps : [result.steps || ''],
             trapToAvoid: result.trapToAvoid,
-          }
+          },
         ];
       } else if (notionType === 'trap') {
         updated.examTraps = [...updated.examTraps, result.trap || notionPrompt];
@@ -104,7 +106,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
       setNotionPrompt('');
       setIsAddingNotion(false);
     } catch (err: any) {
-      setNotionError(err?.message || 'Échec lors de l\'ajout de la notion');
+      setNotionError(err?.message || "Échec lors de l'ajout de la notion");
     } finally {
       setIsLoadingNotion(false);
     }
@@ -112,129 +114,148 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
 
   return (
     <div className={`space-y-6 ${focusLatex ? 'latex-focus' : ''}`}>
-      {/* En-tête de la fiche avec métadonnées et contrôles ergonomiques */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        {/* Halo décoratif */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Event Horizon Hero Header Card */}
+      <div className="bg-[#0A0E19] border border-white/[0.1] rounded-2xl p-5 sm:p-7 relative overflow-hidden">
+        {/* Atmospheric Black Hole Singularity Backdrop */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 right-0 w-full lg:w-3/5 pointer-events-none overflow-hidden"
+        >
+          {!imgFailed ? (
+            <img
+              src={blackHoleHorizonImg}
+              alt=""
+              referrerPolicy="no-referrer"
+              onError={() => setImgFailed(true)}
+              className="w-full h-full object-cover object-center opacity-45 scale-105"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-amber-500/10 via-[#0A0E19] to-sky-500/10" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0A0E19] via-[#0A0E19]/85 to-[#0A0E19]/25" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0A0E19] via-transparent to-[#0A0E19]/50" />
+        </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
-                {sheet.chapter}
-              </span>
-              {sheet.tags.map(tag => (
-                <span key={tag} className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400">
-                  #{tag}
-                </span>
-              ))}
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 relative z-10">
+          <div className="max-w-2xl">
+            <div className="space-y-0.5 mb-2">
+              <p className="text-xs text-sky-300 font-medium">{sheet.chapter}</p>
+              {sheet.tags.length > 0 && (
+                <p className="text-[11px] text-slate-400">
+                  {sheet.tags.join(' · ')}
+                </p>
+              )}
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-50 tracking-tight leading-tight">
               {sheet.title}
             </h1>
-            <p className="text-sm text-slate-400 mt-1">
-              {sheet.subtitle}
-            </p>
+            <p className="text-sm text-slate-300 mt-1.5 leading-relaxed">{sheet.subtitle}</p>
           </div>
 
-          {/* Statut de Maîtrise */}
-          <div className="flex items-center gap-1.5 bg-slate-950/70 p-1.5 rounded-xl border border-slate-800 shrink-0 self-start lg:self-center">
+          {/* Mastery Segmented Control */}
+          <div className="flex items-center gap-1 bg-[#04060C]/90 p-1 rounded-xl border border-white/[0.1] shrink-0 self-start">
             <button
+              type="button"
               onClick={() => handleMasteryChange('to_learn')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                 sheet.mastery === 'to_learn'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-400/35'
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
               À apprendre
             </button>
             <button
+              type="button"
               onClick={() => handleMasteryChange('learning')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                 sheet.mastery === 'learning'
-                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-400/35'
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
               En cours
             </button>
             <button
+              type="button"
               onClick={() => handleMasteryChange('mastered')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                 sheet.mastery === 'mastered'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/35'
+                  : 'text-slate-400 hover:text-slate-100'
               }`}
             >
-              Maîtrisé ✓
+              Maîtrisé
             </button>
           </div>
         </div>
 
-        {/* Barre d'outils interactifs : Focus LaTeX, Active Recall, Entraînement */}
-        <div className="mt-5 pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5">
+        {/* Ergonomic Toolbar */}
+        <div className="relative z-10 mt-6 pt-4 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Toggle Focus LaTeX */}
             <button
+              type="button"
               onClick={() => setFocusLatex(!focusLatex)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
                 focusLatex
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  ? 'bg-amber-500 text-[#04060C] border-amber-400'
+                  : 'bg-[#04060C]/80 border-white/[0.1] text-slate-200 hover:border-amber-400/40'
               }`}
               title="Agrandir et mettre en valeur toutes les équations mathématiques"
             >
               <ZoomIn className="w-3.5 h-3.5" />
-              <span>Focus LaTeX {focusLatex ? 'Activé' : ''}</span>
+              <span>{focusLatex ? 'Focus LaTeX actif' : 'Focus LaTeX'}</span>
             </button>
 
-            {/* Toggle Active Recall */}
             <button
+              type="button"
               onClick={() => setActiveRecall(!activeRecall)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
                 activeRecall
-                  ? 'bg-amber-600 text-white shadow-md shadow-amber-600/30'
-                  : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                  ? 'bg-sky-500 text-[#04060C] border-sky-400'
+                  : 'bg-[#04060C]/80 border-white/[0.1] text-slate-200 hover:border-sky-400/40'
               }`}
               title="Masquer les formules et réponses pour réciter de tête"
             >
               {activeRecall ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              <span>Active Recall {activeRecall ? 'Activé' : ''}</span>
+              <span>{activeRecall ? 'Active Recall actif' : 'Active Recall'}</span>
             </button>
 
-            {/* Ajouter une notion via IA */}
             <button
+              type="button"
               onClick={() => setIsAddingNotion(!isAddingNotion)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#04060C]/80 hover:bg-[#101625] border border-white/[0.1] text-slate-200 text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
             >
-              <PlusCircle className="w-3.5 h-3.5 text-indigo-400" />
+              <PlusCircle className="w-3.5 h-3.5 text-amber-400" />
               <span>Ajouter notion IA</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Boutons d'entraînement interactif */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
+              type="button"
               onClick={() => onOpenRevision('flashcards')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-700/50 text-indigo-300 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#101625] hover:bg-[#161F35] border border-sky-400/25 text-sky-200 text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
             >
-              <BrainCircuit className="w-3.5 h-3.5" />
-              <span>Flashcards ({sheet.flashcards.length})</span>
+              <BrainCircuit className="w-3.5 h-3.5 text-sky-400" />
+              <span>Flashcards</span>
+              <span className="font-mono text-[11px] text-sky-300/80">({sheet.flashcards.length})</span>
             </button>
 
             <button
+              type="button"
               onClick={() => onOpenRevision('quiz')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-700/50 text-purple-300 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#101625] hover:bg-[#161F35] border border-amber-400/30 text-amber-200 text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
             >
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>Quiz QCM ({sheet.quiz.length})</span>
+              <GraduationCap className="w-3.5 h-3.5 text-amber-400" />
+              <span>Quiz QCM</span>
+              <span className="font-mono text-[11px] text-amber-300/80">({sheet.quiz.length})</span>
             </button>
 
-            {/* Éditer la fiche */}
             <button
+              type="button"
               onClick={onEdit}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#04060C]/80 hover:bg-[#101625] border border-white/[0.1] text-slate-200 text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
             >
               <Edit3 className="w-3.5 h-3.5" />
               <span>Modifier</span>
@@ -242,18 +263,21 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
           </div>
         </div>
 
-        {/* Formulaire d'ajout de notion IA (dépliable) */}
+        {/* Formulaire d'ajout de notion IA */}
         {isAddingNotion && (
-          <form onSubmit={handleAddNotionSubmit} className="mt-4 p-4 rounded-xl bg-slate-950/80 border border-indigo-500/30 space-y-3 animate-fade-in">
+          <form
+            onSubmit={handleAddNotionSubmit}
+            className="relative z-10 mt-4 p-4 rounded-xl bg-[#04060C]/95 border border-amber-400/30 space-y-3 animate-fade-in"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
+              <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-400" />
                 Générer et injecter une notion chirurgicale
               </span>
               <button
                 type="button"
                 onClick={() => setIsAddingNotion(false)}
-                className="text-slate-400 hover:text-white text-xs"
+                className="text-slate-400 hover:text-white text-xs font-medium"
               >
                 Fermer
               </button>
@@ -265,16 +289,16 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                   key={type}
                   type="button"
                   onClick={() => setNotionType(type)}
-                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                     notionType === type
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                      ? 'bg-amber-500 text-[#04060C] font-semibold'
+                      : 'bg-[#0A0E19] text-slate-300 border border-white/[0.08] hover:text-white'
                   }`}
                 >
                   {type === 'formula' && 'Formule Magique'}
                   {type === 'theorem' && 'Théorème & Hypothèses'}
                   {type === 'method' && 'Méthode pas à pas'}
-                  {type === 'trap' && 'Piège d\'Examen'}
+                  {type === 'trap' && "Piège d'Examen"}
                 </button>
               ))}
             </div>
@@ -285,136 +309,144 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                 value={notionPrompt}
                 onChange={e => setNotionPrompt(e.target.value)}
                 placeholder="Ex: Équation de Navier-Stokes en régime stationnaire avec unités SI..."
-                className="flex-1 rounded-lg bg-slate-900 border border-slate-700 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="flex-1 rounded-lg bg-[#0A0E19] border border-white/[0.12] px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400/60"
               />
               <button
                 type="submit"
                 disabled={isLoadingNotion || !notionPrompt.trim()}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold transition-all"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#04060C] text-xs font-bold transition-colors whitespace-nowrap"
               >
                 {isLoadingNotion ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 <span>Générer</span>
               </button>
             </div>
 
-            {notionError && (
-              <p className="text-xs text-red-400">{notionError}</p>
-            )}
+            {notionError && <p className="text-xs text-rose-400">{notionError}</p>}
           </form>
         )}
       </div>
 
-      {/* Barre de filtres de sections */}
+      {/* Section Filter Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         <button
+          type="button"
           onClick={() => setActiveTab('all')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
             activeTab === 'all'
-              ? 'bg-slate-800 text-white border border-slate-700'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              ? 'bg-[#101625] text-amber-300 border-amber-400/40'
+              : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-[#0A0E19]'
           }`}
         >
           Tout afficher
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('theorems')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
             activeTab === 'theorems'
-              ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-700/50'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              ? 'bg-[#101625] text-sky-300 border-sky-400/40'
+              : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-[#0A0E19]'
           }`}
         >
-          Théorèmes ({sheet.theorems.length})
+          Théorèmes <span className="font-mono text-[11px] opacity-75">({sheet.theorems.length})</span>
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('formulas')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
             activeTab === 'formulas'
-              ? 'bg-blue-950/80 text-blue-300 border border-blue-700/50'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              ? 'bg-[#101625] text-amber-300 border-amber-400/40'
+              : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-[#0A0E19]'
           }`}
         >
-          Formules Magiques ({sheet.magicFormulas.length})
+          Formules Magiques <span className="font-mono text-[11px] opacity-75">({sheet.magicFormulas.length})</span>
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('methods')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
             activeTab === 'methods'
-              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              ? 'bg-[#101625] text-emerald-300 border-emerald-400/40'
+              : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-[#0A0E19]'
           }`}
         >
-          Méthodes Pas à Pas ({sheet.stepByStepMethods.length})
+          Méthodes <span className="font-mono text-[11px] opacity-75">({sheet.stepByStepMethods.length})</span>
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab('traps')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap ${
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
             activeTab === 'traps'
-              ? 'bg-red-950/80 text-red-300 border border-red-700/50'
-              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+              ? 'bg-[#101625] text-rose-300 border-rose-400/40'
+              : 'bg-transparent border-transparent text-slate-400 hover:text-slate-100 hover:bg-[#0A0E19]'
           }`}
         >
-          Pièges d'Examen ({sheet.examTraps.length})
+          Pièges d'Examen <span className="font-mono text-[11px] opacity-75">({sheet.examTraps.length})</span>
         </button>
       </div>
 
-      {/* 1. SECTION THÉORÈMES */}
+      {/* 1. THÉORÈMES */}
       {(activeTab === 'all' || activeTab === 'theorems') && sheet.theorems.length > 0 && (
         <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <BookMarked className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-base font-bold text-white tracking-tight">
-              Théorèmes Fondamentaux & Hypothèses Indispensables
+          <div className="flex items-center gap-2.5">
+            <BookMarked className="w-4 h-4 text-sky-400" />
+            <h2 className="font-display text-lg font-semibold text-slate-100 tracking-tight">
+              Théorèmes Fondamentaux & Hypothèses
             </h2>
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {sheet.theorems.map((thm) => {
+            {sheet.theorems.map((thm, index) => {
               const isHidden = activeRecall && !revealedItems[thm.id];
 
               return (
-                <div
+                <article
                   key={thm.id}
-                  className="rounded-2xl bg-slate-900/90 border border-indigo-950 hover:border-indigo-800/60 p-5 shadow-lg transition-all"
+                  className="rounded-2xl bg-[#0A0E19] border border-white/[0.08] hover:border-sky-400/30 p-5 sm:p-6 transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-bold text-indigo-300">
-                      {thm.name}
-                    </h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="font-mono text-xs text-sky-400 font-semibold">
+                        0{index + 1}.
+                      </span>
+                      <h3 className="font-display text-base font-semibold text-slate-100">
+                        {thm.name}
+                      </h3>
+                    </div>
                     {activeRecall && (
                       <button
+                        type="button"
                         onClick={() => toggleReveal(thm.id)}
-                        className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 bg-amber-950/50 border border-amber-800/50 px-2 py-0.5 rounded-md"
+                        className="text-xs text-amber-300 hover:text-amber-200 bg-amber-500/10 border border-amber-400/30 px-2.5 py-1 rounded-lg font-semibold shrink-0"
                       >
                         {isHidden ? 'Révéler' : 'Masquer'}
                       </button>
                     )}
                   </div>
 
-                  {/* Énoncé LaTeX */}
-                  <div className="my-3 p-3.5 rounded-xl bg-slate-950 border border-slate-800/80 text-center">
+                  {/* Equation Well */}
+                  <div className="my-4 p-4 rounded-xl bg-[#04060C] border border-white/[0.07] text-center">
                     {isHidden ? (
-                      <p className="text-xs text-slate-500 italic py-2">
-                        [Active Recall : Récitez l'énoncé mathématique de tête, puis cliquez sur Révéler]
+                      <p className="text-xs text-slate-400 italic py-2">
+                        Active Recall : récitez l'énoncé mathématique de tête, puis révélez.
                       </p>
                     ) : (
                       <MathView math={thm.statement} block />
                     )}
                   </div>
 
-                  {/* Hypothèses indispensables */}
-                  <div className="mt-3">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <div className="mt-4">
+                    <p className="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                      Hypothèses indispensables sans omission (Exigence ESTACA) :
+                      <span>Hypothèses strictes requises</span>
                     </p>
                     {isHidden ? (
-                      <p className="text-xs text-slate-600 italic">Hypothèses masquées</p>
+                      <p className="text-xs text-slate-500 italic">Hypothèses masquées</p>
                     ) : (
-                      <ul className="space-y-1">
+                      <ul className="space-y-1.5 pl-1">
                         {thm.strictConditions.map((cond, idx) => (
-                          <li key={idx} className="text-xs text-slate-300 flex items-start gap-2">
-                            <span className="text-indigo-400 font-bold">•</span>
+                          <li key={idx} className="text-xs text-slate-300 flex items-start gap-2.5 leading-relaxed">
+                            <span className="text-sky-400 font-mono mt-0.5">—</span>
                             <MathView>{cond}</MathView>
                           </li>
                         ))}
@@ -422,76 +454,74 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                     )}
                   </div>
 
-                  {/* Conseil du Prof */}
                   {thm.professorTip && !isHidden && (
-                    <div className="mt-3 p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-800/40 text-xs text-indigo-200 flex items-start gap-2">
-                      <Sparkles className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
-                      <div>
-                        <strong className="text-indigo-300 font-semibold">Conseil d'Examen : </strong>
-                        <span>{thm.professorTip}</span>
-                      </div>
+                    <div className="mt-4 pt-3.5 border-t border-white/[0.06] text-xs text-slate-300 flex items-start gap-2.5">
+                      <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <p className="leading-relaxed">
+                        <strong className="text-amber-300 font-semibold">Astuce d'examen : </strong>
+                        {thm.professorTip}
+                      </p>
                     </div>
                   )}
-                </div>
+                </article>
               );
             })}
           </div>
         </section>
       )}
 
-      {/* 2. SECTION FORMULES MAGIQUES */}
+      {/* 2. FORMULES MAGIQUES */}
       {(activeTab === 'all' || activeTab === 'formulas') && sheet.magicFormulas.length > 0 && (
         <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-blue-400" />
-            <h2 className="text-base font-bold text-white tracking-tight">
-              Formules Magiques & Définitions Strictes des Unités SI
+          <div className="flex items-center gap-2.5">
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            <h2 className="font-display text-lg font-semibold text-slate-100 tracking-tight">
+              Formules Clés & Unités SI
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {sheet.magicFormulas.map((formula) => {
+            {sheet.magicFormulas.map(formula => {
               const isHidden = activeRecall && !revealedItems[formula.id];
 
               return (
-                <div
+                <article
                   key={formula.id}
-                  className="rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-blue-800/60 p-5 shadow-lg flex flex-col justify-between"
+                  className="rounded-2xl bg-[#0A0E19] border border-white/[0.08] hover:border-amber-400/30 p-5 flex flex-col justify-between transition-colors"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-sm font-bold text-blue-300">
+                      <h3 className="font-display text-sm font-semibold text-amber-200">
                         {formula.name}
                       </h3>
                       {activeRecall && (
                         <button
+                          type="button"
                           onClick={() => toggleReveal(formula.id)}
-                          className="text-xs text-amber-400 hover:text-amber-300 flex items-center gap-1 bg-amber-950/50 border border-amber-800/50 px-2 py-0.5 rounded-md"
+                          className="text-xs text-amber-300 hover:text-amber-200 bg-amber-500/10 border border-amber-400/30 px-2.5 py-1 rounded-lg font-semibold shrink-0"
                         >
                           {isHidden ? 'Révéler' : 'Masquer'}
                         </button>
                       )}
                     </div>
 
-                    {/* Rendu Mathématique de la formule */}
-                    <div className="my-3 p-3 rounded-xl bg-slate-950 border border-slate-800 text-center">
+                    <div className="my-3.5 p-3.5 rounded-xl bg-[#04060C] border border-white/[0.07] text-center">
                       {isHidden ? (
-                        <p className="text-xs text-slate-500 italic py-2">
-                          [Formule masquée pour auto-évaluation]
+                        <p className="text-xs text-slate-400 italic py-2">
+                          Formule masquée pour auto-évaluation
                         </p>
                       ) : (
                         <MathView math={formula.formula} block />
                       )}
                     </div>
 
-                    {/* Définitions des variables et 100% des unités SI */}
-                    <div className="space-y-1.5 text-xs">
+                    <div className="space-y-2 text-xs leading-relaxed">
                       <div>
-                        <span className="font-semibold text-slate-400">Unités SI & Variables : </span>
+                        <span className="font-semibold text-slate-400">Variables & SI : </span>
                         {isHidden ? (
-                          <span className="text-slate-600 italic">Masqué</span>
+                          <span className="text-slate-500 italic">Masqué</span>
                         ) : (
-                          <span className="text-slate-300">
+                          <span className="text-slate-200">
                             <MathView>{formula.unitsAndVariables}</MathView>
                           </span>
                         )}
@@ -499,47 +529,47 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
 
                       {formula.validityDomain && !isHidden && (
                         <div>
-                          <span className="font-semibold text-slate-400">Domaine de validité : </span>
+                          <span className="font-semibold text-slate-400">Validité : </span>
                           <span className="text-slate-300">{formula.validityDomain}</span>
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
         </section>
       )}
 
-      {/* 3. SECTION MÉTHODES PAS À PAS */}
+      {/* 3. MÉTHODES PAS À PAS */}
       {(activeTab === 'all' || activeTab === 'methods') && sheet.stepByStepMethods.length > 0 && (
         <section className="space-y-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-base font-bold text-white tracking-tight">
-              Méthodes de Résolution Type Étape par Étape
+          <div className="flex items-center gap-2.5">
+            <CheckCircle className="w-4 h-4 text-emerald-400" />
+            <h2 className="font-display text-lg font-semibold text-slate-100 tracking-tight">
+              Méthodes de Résolution Pas à Pas
             </h2>
           </div>
 
           <div className="space-y-4">
-            {sheet.stepByStepMethods.map((method) => {
+            {sheet.stepByStepMethods.map(method => {
               const isHidden = activeRecall && !revealedItems[method.id];
 
               return (
-                <div
+                <article
                   key={method.id}
-                  className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-lg"
+                  className="rounded-2xl bg-[#0A0E19] border border-white/[0.08] p-5 sm:p-6"
                 >
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <h3 className="text-sm font-bold text-emerald-300 flex items-center gap-2">
-                      <span className="p-1 rounded bg-emerald-500/20 text-emerald-400 text-xs">Objectif</span>
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <h3 className="font-display text-sm font-semibold text-emerald-300">
                       {method.goal}
                     </h3>
                     {activeRecall && (
                       <button
+                        type="button"
                         onClick={() => toggleReveal(method.id)}
-                        className="text-xs text-amber-400 hover:text-amber-300 bg-amber-950/50 border border-amber-800/50 px-2 py-0.5 rounded-md"
+                        className="text-xs text-amber-300 hover:text-amber-200 bg-amber-500/10 border border-amber-400/30 px-2.5 py-1 rounded-lg font-semibold shrink-0"
                       >
                         {isHidden ? 'Révéler les étapes' : 'Masquer'}
                       </button>
@@ -547,15 +577,18 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                   </div>
 
                   {isHidden ? (
-                    <p className="text-xs text-slate-500 italic py-2 bg-slate-950/50 rounded-lg p-3">
-                      [Étapes masquées : Quelle est votre démarche complète ? Révélez pour vérifier]
+                    <p className="text-xs text-slate-400 italic py-3 px-4 bg-[#04060C] rounded-xl border border-white/[0.06]">
+                      Étapes masquées : formulez votre démarche complète avant de révéler.
                     </p>
                   ) : (
-                    <ol className="space-y-2 mb-3">
+                    <ol className="space-y-2 mb-4">
                       {method.steps.map((step, idx) => (
-                        <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 bg-slate-950/50 p-2.5 rounded-xl border border-slate-800/50">
-                          <span className="font-mono text-emerald-400 font-bold">{idx + 1}.</span>
-                          <div className="flex-1">
+                        <li
+                          key={idx}
+                          className="text-xs text-slate-200 flex items-start gap-3 bg-[#04060C] px-3.5 py-2.5 rounded-xl border border-white/[0.06]"
+                        >
+                          <span className="font-mono text-emerald-400 font-semibold">0{idx + 1}</span>
+                          <div className="flex-1 leading-relaxed">
                             <MathView>{step}</MathView>
                           </div>
                         </li>
@@ -564,33 +597,36 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                   )}
 
                   {method.trapToAvoid && !isHidden && (
-                    <div className="p-2.5 rounded-xl bg-amber-950/30 border border-amber-800/40 text-xs text-amber-200 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span><strong>Piège à éviter : </strong>{method.trapToAvoid}</span>
+                    <div className="pt-3 border-t border-white/[0.06] text-xs text-amber-200/90 flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        <strong className="text-amber-300 font-semibold">Piège à éviter : </strong>
+                        {method.trapToAvoid}
+                      </span>
                     </div>
                   )}
-                </div>
+                </article>
               );
             })}
           </div>
         </section>
       )}
 
-      {/* 4. SECTION PIÈGES D'EXAMEN */}
+      {/* 4. PIÈGES D'EXAMEN */}
       {(activeTab === 'all' || activeTab === 'traps') && sheet.examTraps.length > 0 && (
         <section className="space-y-3">
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-red-400" />
-            <h2 className="text-base font-bold text-white tracking-tight">
-              Pièges d'Examen et Erreurs Récurrentes (À bannir)
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <h2 className="font-display text-lg font-semibold text-slate-100 tracking-tight">
+              Pièges d'Examen & Erreurs à Bannir
             </h2>
           </div>
 
-          <div className="rounded-2xl bg-red-950/15 border border-red-900/40 p-5 space-y-2.5">
+          <div className="rounded-2xl bg-[#0A0E19] border border-rose-500/25 p-5 space-y-2.5">
             {sheet.examTraps.map((trap, idx) => (
-              <div key={idx} className="flex items-start gap-2.5 text-xs text-red-200">
-                <span className="text-red-400 font-bold shrink-0">⚠️</span>
-                <span className="leading-relaxed">
+              <div key={idx} className="flex items-start gap-3 text-xs text-rose-200/90 leading-relaxed">
+                <span className="font-mono text-rose-400 font-bold shrink-0">0{idx + 1}</span>
+                <span>
                   <MathView>{trap}</MathView>
                 </span>
               </div>
@@ -599,39 +635,45 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
         </section>
       )}
 
-      {/* 5. APERÇU ENTRAÎNEMENT FLASHCARDS & QUIZ */}
+      {/* 5. TRAINING LAUNCHERS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-indigo-950/60 to-slate-900 border border-indigo-800/40 flex flex-col justify-between">
+        <div className="p-5 rounded-2xl bg-[#0A0E19] border border-sky-400/25 flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 text-indigo-400 mb-2">
-              <BrainCircuit className="w-5 h-5" />
-              <h3 className="font-bold text-sm text-white">Cartes Réflexes (Flashcards)</h3>
+            <div className="flex items-center gap-2 text-sky-400 mb-2">
+              <BrainCircuit className="w-4 h-4" />
+              <h3 className="font-display font-semibold text-sm text-slate-100">
+                Cartes Réflexes (Flashcards)
+              </h3>
             </div>
-            <p className="text-xs text-slate-400">
-              {sheet.flashcards.length} cartes recto/verso pour ancrer les définitions et réflexes de calcul en mémoire à long terme.
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {sheet.flashcards.length} cartes recto/verso pour ancrer les définitions et réflexes de calcul.
             </p>
           </div>
           <button
+            type="button"
             onClick={() => onOpenRevision('flashcards')}
-            className="mt-4 w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-colors shadow-md shadow-indigo-600/30"
+            className="mt-4 w-full py-2.5 px-4 rounded-xl bg-sky-500 hover:bg-sky-400 text-[#04060C] font-bold text-xs transition-colors"
           >
             Lancer la session Flashcards
           </button>
         </div>
 
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-purple-950/60 to-slate-900 border border-purple-800/40 flex flex-col justify-between">
+        <div className="p-5 rounded-2xl bg-[#0A0E19] border border-amber-400/25 flex flex-col justify-between">
           <div>
-            <div className="flex items-center gap-2 text-purple-400 mb-2">
-              <GraduationCap className="w-5 h-5" />
-              <h3 className="font-bold text-sm text-white">QCM d'Auto-Évaluation Noté</h3>
+            <div className="flex items-center gap-2 text-amber-400 mb-2">
+              <GraduationCap className="w-4 h-4" />
+              <h3 className="font-display font-semibold text-sm text-slate-100">
+                QCM d'Auto-Évaluation Noté
+              </h3>
             </div>
-            <p className="text-xs text-slate-400">
-              {sheet.quiz.length} questions avec barème, chronométrage et corrections pédagogiques détaillées.
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {sheet.quiz.length} questions avec barème ESTACA et corrections pédagogiques détaillées.
             </p>
           </div>
           <button
+            type="button"
             onClick={() => onOpenRevision('quiz')}
-            className="mt-4 w-full py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs transition-colors shadow-md shadow-purple-600/30"
+            className="mt-4 w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-[#04060C] font-bold text-xs transition-colors"
           >
             Passer le Quiz Noté
           </button>

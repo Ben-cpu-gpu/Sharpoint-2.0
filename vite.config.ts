@@ -9,8 +9,9 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
-    host: true, // Écoute sur 0.0.0.0 pour accès immédiat depuis smartphone sur le même Wi-Fi
-    port: 5173,
+    host: '0.0.0.0',
+    port: 3000,
+    allowedHosts: true,
   },
   optimizeDeps: {
     include: ['pdfjs-dist', 'katex', 'lucide-react', 'framer-motion'],

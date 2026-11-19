@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, Calculator, GraduationCap, PlusCircle, Settings, Sparkles } from 'lucide-react';
+import { BookOpen, Calculator, GraduationCap, Settings, PlusCircle } from 'lucide-react';
 import { MainTab } from './Header';
 
 interface MobileBottomNavProps {
@@ -22,83 +22,70 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   counts,
 }) => {
   return (
-    <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#131314]/95 border-t border-[#282a2c] backdrop-blur-xl px-2 py-1.5 flex items-center justify-around shadow-2xl safe-area-pb">
-      {/* 1. Fiches */}
+    <nav
+      aria-label="Navigation mobile"
+      className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#04060C]/95 border-t border-white/[0.08] backdrop-blur-xl px-2 py-1.5 flex items-center justify-around safe-area-pb"
+    >
       <button
+        type="button"
         onClick={() => onTabChange('sheets')}
-        className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-          currentTab === 'sheets'
-            ? 'text-blue-400 font-bold scale-105'
-            : 'text-[#8e918f] hover:text-[#e3e3e3]'
+        className={`flex flex-col items-center justify-center min-h-[44px] px-2.5 rounded-lg transition-colors ${
+          currentTab === 'sheets' ? 'text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-100'
         }`}
       >
-        <div className="relative">
-          <BookOpen className="w-5 h-5" />
-          {counts.sheets > 0 && (
-            <span className="absolute -top-1 -right-2 bg-blue-600 text-white text-[9px] font-bold px-1 rounded-full">
-              {counts.sheets}
-            </span>
-          )}
+        <div className="flex items-center gap-1">
+          <BookOpen className="w-4 h-4" />
+          <span className="font-mono text-[10px]">{counts.sheets}</span>
         </div>
         <span className="text-[10px] mt-0.5">Fiches</span>
       </button>
 
-      {/* 2. TD */}
       <button
+        type="button"
         onClick={() => onTabChange('td')}
-        className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-          currentTab === 'td'
-            ? 'text-blue-400 font-bold scale-105'
-            : 'text-[#8e918f] hover:text-[#e3e3e3]'
+        className={`flex flex-col items-center justify-center min-h-[44px] px-2.5 rounded-lg transition-colors ${
+          currentTab === 'td' ? 'text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-100'
         }`}
       >
-        <div className="relative">
-          <Calculator className="w-5 h-5" />
-          {counts.td > 0 && (
-            <span className="absolute -top-1 -right-2 bg-blue-600 text-white text-[9px] font-bold px-1 rounded-full">
-              {counts.td}
-            </span>
-          )}
+        <div className="flex items-center gap-1">
+          <Calculator className="w-4 h-4" />
+          <span className="font-mono text-[10px]">{counts.td}</span>
         </div>
-        <span className="text-[10px] mt-0.5">TD & Exo</span>
+        <span className="text-[10px] mt-0.5">TD</span>
       </button>
 
-      {/* 3. Bouton Central Ingestion IA (Google Sparkle) */}
       <button
+        type="button"
         onClick={onOpenIngest}
-        className="flex flex-col items-center justify-center -mt-4 bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white p-2.5 rounded-2xl shadow-lg shadow-blue-500/30 active:scale-95 transition-transform"
+        aria-label="Ingérer un PDF ou cours"
+        className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold shadow-[0_0_18px_-4px_rgba(245,158,11,0.55)] active:scale-95 transition-transform"
       >
-        <Sparkles className="w-5 h-5" />
-        <span className="text-[9px] font-extrabold mt-0.5">Ingérer</span>
+        <PlusCircle className="w-4 h-4" />
+        <span>Ingérer</span>
       </button>
 
-      {/* 4. Annales */}
       <button
+        type="button"
         onClick={() => onTabChange('annales')}
-        className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition-all ${
-          currentTab === 'annales'
-            ? 'text-blue-400 font-bold scale-105'
-            : 'text-[#8e918f] hover:text-[#e3e3e3]'
+        className={`flex flex-col items-center justify-center min-h-[44px] px-2.5 rounded-lg transition-colors ${
+          currentTab === 'annales' ? 'text-amber-400 font-semibold' : 'text-slate-400 hover:text-slate-100'
         }`}
       >
-        <div className="relative">
-          <GraduationCap className="w-5 h-5" />
-          {counts.annales > 0 && (
-            <span className="absolute -top-1 -right-2 bg-blue-600 text-white text-[9px] font-bold px-1 rounded-full">
-              {counts.annales}
-            </span>
-          )}
+        <div className="flex items-center gap-1">
+          <GraduationCap className="w-4 h-4" />
+          <span className="font-mono text-[10px]">{counts.annales}</span>
         </div>
         <span className="text-[10px] mt-0.5">Annales</span>
       </button>
 
-      {/* 5. Réglages API */}
       <button
+        type="button"
         onClick={onOpenSettings}
-        className="flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-[#8e918f] hover:text-white transition-colors"
+        aria-label="Ouvrir les paramètres de modèle IA"
+        className="flex flex-col items-center justify-center min-h-[44px] px-2.5 rounded-lg text-slate-400 hover:text-white transition-colors"
       >
-        <Settings className="w-5 h-5" />
-        <span className="text-[10px] mt-0.5">Studio</span>
+        <Settings className="w-4 h-4" />
+        <span className="text-[10px] mt-0.5">Modèles</span>
       </button>
     </nav>
   );

@@ -1,35 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  Key, 
-  ExternalLink, 
-  CheckCircle2, 
-  Sparkles, 
-  Eye, 
-  EyeOff, 
-  Trash2, 
-  Cpu, 
-  Sliders, 
-  ShieldCheck, 
-  Layers, 
-  Laptop, 
-  Zap 
+import {
+  X,
+  Key,
+  ExternalLink,
+  CheckCircle2,
+  Sparkles,
+  Eye,
+  EyeOff,
+  Trash2,
+  Cpu,
+  Sliders,
+  Layers,
+  Laptop,
+  Zap,
 } from 'lucide-react';
-import { 
-  getGeminiApiKey, 
-  setGeminiApiKey, 
-  getAnthropicApiKey, 
-  setAnthropicApiKey, 
-  getOpenAIApiKey, 
-  setOpenAIApiKey, 
-  getGroqApiKey, 
-  setGroqApiKey, 
-  getSelectedModel, 
-  setSelectedModel, 
-  getSelectedProvider, 
-  setSelectedProvider, 
-  ALL_MODELS, 
-  AIProvider 
+import {
+  getGeminiApiKey,
+  setGeminiApiKey,
+  getAnthropicApiKey,
+  setAnthropicApiKey,
+  getOpenAIApiKey,
+  setOpenAIApiKey,
+  getGroqApiKey,
+  setGroqApiKey,
+  getSelectedModel,
+  setSelectedModel,
+  getSelectedProvider,
+  setSelectedProvider,
+  ALL_MODELS,
+  AIProvider,
 } from '../../services/apiKeyService';
 import { STRICT_EXHAUSTIVENESS_RULE } from '../../services/aiService';
 
@@ -50,7 +49,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const [openaiKey, setOpenaiKey] = useState('');
   const [groqKey, setGroqKey] = useState('');
   const [selectedModel, setModel] = useState('gemini-3.1-pro');
-  
+
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showClaudeKey, setShowClaudeKey] = useState(false);
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
@@ -90,21 +89,19 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setTimeout(() => {
       setSavedSuccess(false);
       onClose();
-    }, 1200);
+    }, 1000);
   };
 
   const handleClearAllKeys = () => {
-    if (confirm('Voulez-vous supprimer toutes les clés API stockées localement ?')) {
-      setGeminiApiKey('');
-      setAnthropicApiKey('');
-      setOpenAIApiKey('');
-      setGroqApiKey('');
-      setGeminiKey('');
-      setClaudeKey('');
-      setOpenaiKey('');
-      setGroqKey('');
-      onKeysUpdated();
-    }
+    setGeminiApiKey('');
+    setAnthropicApiKey('');
+    setOpenAIApiKey('');
+    setGroqApiKey('');
+    setGeminiKey('');
+    setClaudeKey('');
+    setOpenaiKey('');
+    setGroqKey('');
+    onKeysUpdated();
   };
 
   const isGeminiConnected = geminiKey.trim().length > 10;
@@ -113,84 +110,87 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-2xl bg-[#1e1f20] border border-[#37393b] rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header style Google AI Studio / Gemini Notebook */}
-        <div className="px-6 py-4 border-b border-[#37393b] flex items-center justify-between bg-[#131314]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Modèles et Clés API"
+        className="relative w-full max-w-2xl bg-[#0A0E19] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+      >
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-[#04060C]">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-gradient-to-tr from-blue-500 via-indigo-500 to-pink-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Sparkles className="w-4 h-4 text-white" />
+            <div className="h-9 w-9 rounded-xl bg-amber-500/15 border border-amber-400/35 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-amber-400" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm font-bold text-[#e3e3e3]">Studio IA • Modèles & Clés API</h2>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  Client-Side Only
-                </span>
-              </div>
-              <p className="text-[11px] text-[#8e918f]">
-                Gemini 3 Notebook, Claude 5.5, ChatGPT GPT-5 ou Mode Local Prioritaire
+              <h2 className="font-display text-sm font-bold text-slate-100">
+                Studio IA · Modèles & Clés API
+              </h2>
+              <p className="text-xs text-slate-400">
+                Exécution locale navigateur · Gemini, Claude, OpenAI ou Mode Offline
               </p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-[#8e918f] hover:text-white hover:bg-[#282a2c] transition-colors"
+            aria-label="Fermer les paramètres"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Corps principal */}
-        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 text-xs text-[#c4c7c5]">
-          {/* Sélection rapide du Moteur / Fournisseur */}
-          <div className="space-y-2">
-            <label className="block text-xs font-semibold text-[#e3e3e3] flex items-center gap-1.5">
-              <Cpu className="w-4 h-4 text-blue-400" />
-              <span>Sélectionnez votre Moteur d'IA :</span>
+        {/* Form Body */}
+        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 text-xs text-slate-300">
+          <div className="space-y-2.5">
+            <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+              <Cpu className="w-4 h-4 text-amber-400" />
+              <span>Fournisseur d'IA actif</span>
             </label>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setActiveTab('gemini')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all ${
+                className={`p-3 rounded-xl border flex flex-col items-center text-center transition-colors ${
                   activeTab === 'gemini'
-                    ? 'bg-blue-600/20 border-blue-500 text-white ring-1 ring-blue-500'
-                    : 'bg-[#131314] border-[#37393b] text-[#8e918f] hover:text-white'
+                    ? 'bg-[#101625] border-amber-400/50 text-white'
+                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
-                <Sparkles className="w-4 h-4 mb-1 text-blue-400" />
-                <span className="font-bold text-xs">Gemini 3</span>
-                <span className="text-[9px] text-[#8e918f]">Notebook IA</span>
+                <Sparkles className="w-4 h-4 mb-1.5 text-amber-400" />
+                <span className="font-semibold text-xs">Gemini 3</span>
+                <span className="text-[11px] text-slate-400">Notebook IA</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('claude')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all ${
+                className={`p-3 rounded-xl border flex flex-col items-center text-center transition-colors ${
                   activeTab === 'claude'
-                    ? 'bg-purple-600/20 border-purple-500 text-white ring-1 ring-purple-500'
-                    : 'bg-[#131314] border-[#37393b] text-[#8e918f] hover:text-white'
+                    ? 'bg-[#101625] border-sky-400/50 text-white'
+                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
-                <Zap className="w-4 h-4 mb-1 text-purple-400" />
-                <span className="font-bold text-xs">Claude 5.5</span>
-                <span className="text-[9px] text-[#8e918f]">Sonnet / Haiku</span>
+                <Zap className="w-4 h-4 mb-1.5 text-sky-400" />
+                <span className="font-semibold text-xs">Claude 5.5</span>
+                <span className="text-[11px] text-slate-400">Sonnet / Haiku</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveTab('openai')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all ${
+                className={`p-3 rounded-xl border flex flex-col items-center text-center transition-colors ${
                   activeTab === 'openai'
-                    ? 'bg-emerald-600/20 border-emerald-500 text-white ring-1 ring-emerald-500'
-                    : 'bg-[#131314] border-[#37393b] text-[#8e918f] hover:text-white'
+                    ? 'bg-[#101625] border-emerald-400/50 text-white'
+                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
-                <Layers className="w-4 h-4 mb-1 text-emerald-400" />
-                <span className="font-bold text-xs">ChatGPT</span>
-                <span className="text-[9px] text-[#8e918f]">GPT-5 / GPT-4o</span>
+                <Layers className="w-4 h-4 mb-1.5 text-emerald-400" />
+                <span className="font-semibold text-xs">ChatGPT</span>
+                <span className="text-[11px] text-slate-400">GPT-5 / 4o</span>
               </button>
 
               <button
@@ -200,63 +200,59 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   setModel('local-priority');
                   setSelectedModel('local-priority');
                 }}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-all ${
+                className={`p-3 rounded-xl border flex flex-col items-center text-center transition-colors ${
                   activeTab === 'local'
-                    ? 'bg-amber-600/20 border-amber-500 text-white ring-1 ring-amber-500'
-                    : 'bg-[#131314] border-[#37393b] text-[#8e918f] hover:text-white'
+                    ? 'bg-[#101625] border-amber-400/50 text-white'
+                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
-                <Laptop className="w-4 h-4 mb-1 text-amber-400" />
-                <span className="font-bold text-xs">Mode Local</span>
-                <span className="text-[9px] text-[#8e918f]">Zero Clé 100% Off</span>
+                <Laptop className="w-4 h-4 mb-1.5 text-amber-300" />
+                <span className="font-semibold text-xs">Mode Local</span>
+                <span className="text-[11px] text-slate-400">100% Offline</span>
               </button>
             </div>
           </div>
 
-          {/* Liste des modèles pour le fournisseur actif */}
           <div className="space-y-2">
-            <label className="block text-[11px] font-bold text-[#8e918f] uppercase tracking-wider">
-              Variante de modèle active :
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <span className="block text-xs font-semibold text-slate-300">
+              Variante de modèle active
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {ALL_MODELS.filter(m => m.provider === activeTab).map(m => (
                 <button
                   type="button"
                   key={m.id}
                   onClick={() => handleSelectModel(m.id, m.provider)}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
+                  className={`p-3.5 rounded-xl border text-left transition-colors ${
                     selectedModel === m.id
-                      ? 'bg-blue-600/15 border-blue-500 text-white ring-1 ring-blue-500'
-                      : 'bg-[#131314] border-[#37393b] text-[#c4c7c5] hover:border-[#444746]'
+                      ? 'bg-[#101625] border-amber-400/50 text-white'
+                      : 'bg-[#04060C] border-white/[0.08] text-slate-300 hover:border-white/[0.2]'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-white">{m.name}</span>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#282a2c] text-[#8e918f]">
-                      {m.badge}
-                    </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-xs text-slate-100">{m.name}</span>
+                    <span className="text-[11px] font-mono text-amber-300/90 shrink-0">{m.badge}</span>
                   </div>
-                  <p className="text-[10px] text-[#8e918f] mt-1">{m.description}</p>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">{m.description}</p>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Onglet 1 : Clé Google Gemini */}
           {activeTab === 'gemini' && (
-            <div className="space-y-3 p-4 rounded-2xl bg-[#131314] border border-[#282a2c]">
+            <div className="space-y-3 p-4 rounded-xl bg-[#04060C] border border-white/[0.08]">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-blue-300 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-blue-400" />
-                  Clé Google Gemini (Google AI Studio)
+                <span className="font-semibold text-xs text-amber-300 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Clé Google Gemini</span>
                 </span>
                 <a
                   href="https://aistudio.google.com/app/apikey"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-blue-400 hover:underline flex items-center gap-1"
+                  className="text-xs text-sky-400 hover:underline flex items-center gap-1"
                 >
-                  <span>Obtenir clé gratuite</span>
+                  <span>Obtenir une clé</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -266,37 +262,40 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   type={showGeminiKey ? 'text' : 'password'}
                   value={geminiKey}
                   onChange={e => setGeminiKey(e.target.value)}
+                  aria-label="Clé API Google Gemini"
                   placeholder="AIzaSy..."
-                  className="w-full rounded-xl bg-[#1e1f20] border border-[#37393b] px-3.5 py-2 text-xs text-white placeholder-[#8e918f] focus:outline-none focus:border-blue-500 font-mono pr-10"
+                  className="w-full rounded-xl bg-[#0A0E19] border border-white/[0.12] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400/60 font-mono pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowGeminiKey(!showGeminiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8e918f] hover:text-white"
+                  aria-label={showGeminiKey ? 'Masquer la clé Gemini' : 'Afficher la clé Gemini'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
                   {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
 
-              <p className="text-[10px] text-[#8e918f]">
-                {isGeminiConnected ? '✓ Clé Gemini enregistrée et valide sur ce navigateur.' : 'Renseignez votre clé pour activer Gemini 3 Pro et Gemini 3 Flash.'}
+              <p className="text-[11px] text-slate-400">
+                {isGeminiConnected
+                  ? 'Clé Gemini enregistrée sur ce navigateur.'
+                  : 'Renseignez votre clé pour activer Gemini 3 Pro et Gemini 3 Flash.'}
               </p>
             </div>
           )}
 
-          {/* Onglet 2 : Clé Anthropic Claude */}
           {activeTab === 'claude' && (
-            <div className="space-y-3 p-4 rounded-2xl bg-[#131314] border border-[#282a2c]">
+            <div className="space-y-3 p-4 rounded-xl bg-[#04060C] border border-white/[0.08]">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-purple-300 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-purple-400" />
-                  Clé API Anthropic (Claude 5.5 Sonnet / Haiku)
+                <span className="font-semibold text-xs text-sky-300 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Clé API Anthropic</span>
                 </span>
                 <a
                   href="https://console.anthropic.com/settings/keys"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-purple-400 hover:underline flex items-center gap-1"
+                  className="text-xs text-sky-400 hover:underline flex items-center gap-1"
                 >
                   <span>console.anthropic.com</span>
                   <ExternalLink className="w-3 h-3" />
@@ -308,37 +307,38 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   type={showClaudeKey ? 'text' : 'password'}
                   value={claudeKey}
                   onChange={e => setClaudeKey(e.target.value)}
+                  aria-label="Clé API Anthropic Claude"
                   placeholder="sk-ant-api03-..."
-                  className="w-full rounded-xl bg-[#1e1f20] border border-[#37393b] px-3.5 py-2 text-xs text-white placeholder-[#8e918f] focus:outline-none focus:border-purple-500 font-mono pr-10"
+                  className="w-full rounded-xl bg-[#0A0E19] border border-white/[0.12] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400/60 font-mono pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowClaudeKey(!showClaudeKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8e918f] hover:text-white"
+                  aria-label={showClaudeKey ? 'Masquer la clé Claude' : 'Afficher la clé Claude'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
                   {showClaudeKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
 
-              <p className="text-[10px] text-[#8e918f]">
-                {isClaudeConnected ? '✓ Clé Claude active.' : 'Nécessite une clé Anthropic pour utiliser Claude 5.5.'}
+              <p className="text-[11px] text-slate-400">
+                {isClaudeConnected ? 'Clé Claude active.' : 'Nécessite une clé Anthropic pour Claude 5.5.'}
               </p>
             </div>
           )}
 
-          {/* Onglet 3 : Clé OpenAI ChatGPT */}
           {activeTab === 'openai' && (
-            <div className="space-y-3 p-4 rounded-2xl bg-[#131314] border border-[#282a2c]">
+            <div className="space-y-3 p-4 rounded-xl bg-[#04060C] border border-white/[0.08]">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-xs text-emerald-300 flex items-center gap-1.5">
+                <span className="font-semibold text-xs text-emerald-300 flex items-center gap-1.5">
                   <Key className="w-3.5 h-3.5 text-emerald-400" />
-                  Clé API OpenAI (ChatGPT GPT-5 / GPT-4o)
+                  <span>Clé API OpenAI</span>
                 </span>
                 <a
                   href="https://platform.openai.com/api-keys"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[11px] text-emerald-400 hover:underline flex items-center gap-1"
+                  className="text-xs text-sky-400 hover:underline flex items-center gap-1"
                 >
                   <span>platform.openai.com</span>
                   <ExternalLink className="w-3 h-3" />
@@ -350,61 +350,60 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   type={showOpenaiKey ? 'text' : 'password'}
                   value={openaiKey}
                   onChange={e => setOpenaiKey(e.target.value)}
+                  aria-label="Clé API OpenAI"
                   placeholder="sk-proj-..."
-                  className="w-full rounded-xl bg-[#1e1f20] border border-[#37393b] px-3.5 py-2 text-xs text-white placeholder-[#8e918f] focus:outline-none focus:border-emerald-500 font-mono pr-10"
+                  className="w-full rounded-xl bg-[#0A0E19] border border-white/[0.12] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400/60 font-mono pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowOpenaiKey(!showOpenaiKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8e918f] hover:text-white"
+                  aria-label={showOpenaiKey ? 'Masquer la clé OpenAI' : 'Afficher la clé OpenAI'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                 >
                   {showOpenaiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
 
-              <p className="text-[10px] text-[#8e918f]">
-                {isOpenaiConnected ? '✓ Clé OpenAI active.' : 'Renseignez votre clé OpenAI pour le raisonnement GPT-5.'}
+              <p className="text-[11px] text-slate-400">
+                {isOpenaiConnected ? 'Clé OpenAI active.' : 'Renseignez votre clé OpenAI pour GPT-5.'}
               </p>
             </div>
           )}
 
-          {/* Onglet 4 : Mode Local Prioritaire */}
           {activeTab === 'local' && (
-            <div className="p-4 rounded-2xl bg-amber-950/20 border border-amber-800/40 text-amber-200/90 space-y-2">
-              <p className="font-bold text-xs text-amber-300 flex items-center gap-1.5">
+            <div className="p-4 rounded-xl bg-[#04060C] border border-amber-400/30 text-amber-100/90 space-y-1.5">
+              <p className="font-semibold text-xs text-amber-300 flex items-center gap-1.5">
                 <Laptop className="w-4 h-4" />
-                Mode Local Prioritaire Activé
+                <span>Mode Local Prioritaire Activé</span>
               </p>
-              <p className="text-[11px] leading-relaxed">
-                Toutes vos fiches de cours, TD et annales sont traités <strong>100% dans votre navigateur</strong> via le moteur d'extraction Regex instantané. Aucune clé API ni accès internet n'est sollicité.
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Toutes vos fiches de cours, TD et annales sont extraits dans votre navigateur sans clé API ni requête externe.
               </p>
             </div>
           )}
 
-          {/* Volet System Instruction */}
-          <div className="p-3.5 rounded-2xl bg-[#131314] border border-[#37393b] space-y-1.5">
-            <div className="flex items-center gap-1.5 text-blue-400 font-bold text-[11px]">
+          <div className="p-4 rounded-xl bg-[#04060C] border border-white/[0.08] space-y-1.5">
+            <div className="flex items-center gap-1.5 text-sky-300 font-semibold text-xs">
               <Sliders className="w-3.5 h-3.5" />
-              <span>System Instruction Universel (Rigueur ESTACA) :</span>
+              <span>Instruction Système (Rigueur ESTACA)</span>
             </div>
-            <p className="text-[10px] text-[#8e918f] italic leading-relaxed select-all">
+            <p className="text-[11px] text-slate-400 italic leading-relaxed select-all">
               "{STRICT_EXHAUSTIVENESS_RULE}"
             </p>
           </div>
 
           {savedSuccess && (
-            <div className="p-3 rounded-2xl bg-emerald-950/40 border border-emerald-500/50 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in">
+            <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-400/40 text-emerald-300 text-xs flex items-center gap-2 animate-fade-in">
               <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>Modèle et clés mis à jour avec succès !</span>
+              <span>Modèle et clés mis à jour avec succès.</span>
             </div>
           )}
 
-          {/* Actions */}
-          <div className="pt-2 flex items-center justify-between border-t border-[#37393b]">
+          <div className="pt-3 flex items-center justify-between border-t border-white/[0.08]">
             <button
               type="button"
               onClick={handleClearAllKeys}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-950/20 rounded-xl transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/20 rounded-xl transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Effacer clés</span>
@@ -414,15 +413,15 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 rounded-xl bg-[#282a2c] hover:bg-[#37393b] text-[#e3e3e3] text-xs font-semibold"
+                className="px-4 py-2 rounded-xl bg-[#04060C] hover:bg-[#101625] border border-white/[0.1] text-slate-200 text-xs font-semibold"
               >
                 Annuler
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition-all active:scale-95"
+                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold transition-colors"
               >
-                <span>Enregistrer</span>
+                Enregistrer
               </button>
             </div>
           </div>

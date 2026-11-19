@@ -51,7 +51,7 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
   const format2 = (n: number) => n.toString().padStart(2, '0');
 
   const progressPercent = totalSeconds > 0 ? ((totalSeconds - remainingSeconds) / totalSeconds) * 100 : 0;
-  const isUrgent = remainingSeconds > 0 && remainingSeconds <= 300; // moins de 5 minutes
+  const isUrgent = remainingSeconds > 0 && remainingSeconds <= 300;
   const isFinished = remainingSeconds === 0;
 
   const handleReset = () => {
@@ -63,36 +63,41 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
     setRemainingSeconds(prev => Math.max(0, prev + delta * 60));
   };
 
-  // Rendu minimisé (Widget flottant discret en haut à droite)
   if (isMinimized) {
     return (
-      <div className="fixed top-18 right-4 z-50 bg-slate-900 border border-indigo-500/50 rounded-2xl p-3 shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fade-in">
+      <div className="fixed top-20 right-4 z-50 bg-[#0A0E19]/95 border border-amber-400/40 rounded-xl p-3 shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fade-in">
         <div className="flex items-center gap-2">
-          <Clock className={`w-4 h-4 ${isUrgent ? 'text-red-400 animate-pulse' : 'text-indigo-400'}`} />
-          <span className="font-mono text-sm font-bold text-white">
+          <Clock className={`w-4 h-4 ${isUrgent ? 'text-rose-400' : 'text-amber-400'}`} />
+          <span className="font-mono text-sm font-bold text-slate-100">
             {format2(hours)}:{format2(minutes)}:{format2(seconds)}
           </span>
         </div>
 
         <button
+          type="button"
           onClick={() => setIsRunning(!isRunning)}
-          className="p-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white"
+          aria-label={isRunning ? 'Mettre le chronomètre en pause' : 'Démarrer le chronomètre'}
+          className="p-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C]"
         >
           {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
         </button>
 
         <button
+          type="button"
           onClick={() => setIsMinimized(false)}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+          aria-label="Agrandir le chronomètre"
           title="Agrandir"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-white"
         >
           <Maximize2 className="w-3.5 h-3.5" />
         </button>
 
         <button
+          type="button"
           onClick={onClose}
-          className="p-1.5 rounded-lg text-slate-400 hover:text-red-400"
+          aria-label="Fermer le chronomètre"
           title="Fermer"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400"
         >
           <X className="w-3.5 h-3.5" />
         </button>
@@ -100,31 +105,38 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
     );
   }
 
-  // Rendu modale complète
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-fade-in">
-      <div className="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden p-6 text-center space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2 text-indigo-400">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Chronomètre d'examen"
+        className="relative w-full max-w-md bg-[#0A0E19] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden p-6 text-center space-y-6"
+      >
+        <div className="flex items-center justify-between border-b border-white/[0.08] pb-3.5">
+          <div className="flex items-center gap-2 text-amber-400">
             <Clock className="w-4 h-4" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-              Conditions Réelles d'Examen ESTACA
+            <span className="font-display text-xs font-semibold text-slate-200">
+              Conditions Réelles d'Examen
             </span>
           </div>
 
           <div className="flex items-center gap-1">
             <button
+              type="button"
               onClick={() => setIsMinimized(true)}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              aria-label="Minimiser le chronomètre"
               title="Minimiser en widget flottant"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
             >
               <Minimize2 className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              aria-label="Fermer le chronomètre"
               title="Fermer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
             >
               <X className="w-4 h-4" />
             </button>
@@ -132,57 +144,58 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
         </div>
 
         <div>
-          <h3 className="text-sm font-bold text-white line-clamp-1">{examTitle}</h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Durée officielle allouée : {initialMinutes} minutes
+          <h3 className="font-display text-base font-bold text-slate-100 line-clamp-1">{examTitle}</h3>
+          <p className="text-xs text-slate-400 mt-1 font-mono">
+            Durée officielle allouée : {initialMinutes} min
           </p>
         </div>
 
-        {/* Compteur dégressif grand format */}
-        <div className={`p-6 rounded-3xl border transition-all ${
-          isFinished
-            ? 'bg-red-950/40 border-red-500/50 shadow-lg shadow-red-500/20'
-            : isUrgent
-            ? 'bg-amber-950/40 border-amber-500/50 shadow-lg shadow-amber-500/20 animate-pulse'
-            : 'bg-slate-950 border-slate-800'
-        }`}>
-          <div className="font-mono text-5xl sm:text-6xl font-black text-white tracking-tight">
+        <div
+          className={`p-6 rounded-2xl border transition-colors ${
+            isFinished
+              ? 'bg-rose-950/30 border-rose-500/40'
+              : isUrgent
+              ? 'bg-amber-950/30 border-amber-400/50'
+              : 'bg-[#04060C] border-white/[0.08]'
+          }`}
+        >
+          <div className="font-mono text-5xl sm:text-6xl font-bold text-slate-50 tracking-tight">
             {format2(hours)}:{format2(minutes)}:{format2(seconds)}
           </div>
 
-          <div className="mt-4 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+          <div className="mt-5 w-full bg-white/[0.08] h-1.5 rounded-full overflow-hidden">
             <div
               className={`h-full transition-all duration-500 ${
-                isUrgent ? 'bg-amber-500' : isFinished ? 'bg-red-500' : 'bg-indigo-500'
+                isUrgent ? 'bg-amber-400' : isFinished ? 'bg-rose-500' : 'bg-sky-400'
               }`}
               style={{ width: `${progressPercent}%` }}
             />
           </div>
 
           {isFinished && (
-            <div className="mt-3 text-red-400 text-xs font-bold flex items-center justify-center gap-1.5">
+            <div className="mt-3 text-rose-300 text-xs font-semibold flex items-center justify-center gap-1.5">
               <AlertTriangle className="w-4 h-4" />
-              <span>Temps écoulé ! Déposez votre copie d'examen.</span>
+              <span>Temps écoulé. Déposez votre copie d'examen.</span>
             </div>
           )}
         </div>
 
-        {/* Boutons de contrôle du chronomètre */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-2.5">
           <button
+            type="button"
             onClick={() => handleAdjustMinutes(-5)}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-            title="Retirer 5 minutes"
+            className="px-3 py-2 rounded-xl bg-[#04060C] hover:bg-[#101625] border border-white/[0.1] text-slate-300 text-xs font-mono font-semibold"
           >
             -5 min
           </button>
 
           <button
+            type="button"
             onClick={() => setIsRunning(!isRunning)}
-            className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold text-sm shadow-xl transition-all active:scale-95 text-white ${
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs transition-colors ${
               isRunning
-                ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30'
-                : 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30'
+                ? 'bg-sky-500 hover:bg-sky-400 text-[#04060C]'
+                : 'bg-amber-500 hover:bg-amber-400 text-[#04060C]'
             }`}
           >
             {isRunning ? (
@@ -197,24 +210,26 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={handleReset}
-            className="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-            title="Réinitialiser le chronomètre"
+            aria-label="Réinitialiser le chronomètre"
+            title="Réinitialiser"
+            className="p-2.5 rounded-xl bg-[#04060C] hover:bg-[#101625] border border-white/[0.1] text-slate-300 transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
 
           <button
+            type="button"
             onClick={() => handleAdjustMinutes(5)}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
-            title="Ajouter 5 minutes"
+            className="px-3 py-2 rounded-xl bg-[#04060C] hover:bg-[#101625] border border-white/[0.1] text-slate-300 text-xs font-mono font-semibold"
           >
             +5 min
           </button>
         </div>
 
-        <p className="text-[11px] text-slate-500">
-          Vous pouvez minimiser ce chronomètre pour travailler tout en gardant un œil sur le temps restant.
+        <p className="text-[11px] text-slate-400">
+          Minimisez ce chronomètre pour garder le décompte visible pendant votre rédaction.
         </p>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, ArrowLeft, Plus, Trash2, HelpCircle } from 'lucide-react';
+import { Save, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { StudySheet, TheoremItem, MagicFormula, StepByStepMethod, Flashcard, QuizQuestion } from '../../types/course';
 import { MathView } from '../common/MathView';
 
@@ -13,7 +13,6 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
   const [formData, setFormData] = useState<StudySheet>({ ...sheet });
   const [activeTab, setActiveTab] = useState<'info' | 'theorems' | 'formulas' | 'methods' | 'traps' | 'flashcards' | 'quiz'>('info');
 
-  // Raccourci clavier Ctrl+S / Cmd+S pour sauvegarder immédiatement
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -70,7 +69,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
   };
 
   const addTrap = () => {
-    setFormData({ ...formData, examTraps: [...formData.examTraps, 'Nouveau piège d\'examen'] });
+    setFormData({ ...formData, examTraps: [...formData.examTraps, "Nouveau piège d'examen"] });
   };
 
   const removeTrap = (index: number) => {
@@ -109,23 +108,25 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Barre supérieure d'actions */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-xl">
+      {/* Top Action Bar */}
+      <div className="bg-[#0A0E19] border border-white/[0.1] rounded-2xl p-4 flex items-center justify-between gap-3">
         <button
+          type="button"
           onClick={onCancel}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:text-white hover:bg-white/[0.06] transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           <span>Annuler sans sauver</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className="hidden sm:inline text-xs text-slate-500 font-mono">
-            Raccourci: <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">S</kbd>
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline text-xs text-slate-400 font-mono">
+            Raccourci : <kbd className="px-1.5 py-0.5 rounded bg-[#04060C] border border-white/[0.1] text-slate-300">Ctrl</kbd> + <kbd className="px-1.5 py-0.5 rounded bg-[#04060C] border border-white/[0.1] text-slate-300">S</kbd>
           </span>
           <button
+            type="button"
             onClick={() => onSave(formData)}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 transition-all active:scale-95"
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-[#04060C] font-bold text-xs transition-colors"
           >
             <Save className="w-4 h-4" />
             <span>Enregistrer la fiche</span>
@@ -133,16 +134,17 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
         </div>
       </div>
 
-      {/* Onglets de sections de l'éditeur */}
+      {/* Section Tabs */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {(['info', 'theorems', 'formulas', 'methods', 'traps', 'flashcards', 'quiz'] as const).map(tab => (
           <button
             key={tab}
+            type="button"
             onClick={() => setActiveTab(tab)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors border ${
               activeTab === tab
-                ? 'bg-indigo-600 text-white'
-                : 'bg-slate-900 text-slate-400 hover:text-slate-200'
+                ? 'bg-amber-500 text-[#04060C] border-amber-400'
+                : 'bg-[#0A0E19] border-white/[0.08] text-slate-300 hover:text-white'
             }`}
           >
             {tab === 'info' && 'Général'}
@@ -158,8 +160,8 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
 
       {/* 1. INFORMATIONS GÉNÉRALES */}
       {activeTab === 'info' && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+        <div className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-6 space-y-4">
+          <h2 className="font-display text-sm font-bold text-slate-100">
             Informations de la Fiche
           </h2>
 
@@ -170,7 +172,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                 type="text"
                 value={formData.title}
                 onChange={e => setFormData({ ...formData, title: e.target.value })}
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
               />
             </div>
 
@@ -180,7 +182,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                 type="text"
                 value={formData.subtitle}
                 onChange={e => setFormData({ ...formData, subtitle: e.target.value })}
-                className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
               />
             </div>
 
@@ -191,7 +193,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                   type="text"
                   value={formData.chapter}
                   onChange={e => setFormData({ ...formData, chapter: e.target.value })}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
 
@@ -201,7 +203,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                   type="text"
                   value={formData.tags.join(', ')}
                   onChange={e => setFormData({ ...formData, tags: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
             </div>
@@ -213,18 +215,19 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
       {activeTab === 'theorems' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Théorèmes & Hypothèses</h2>
+            <h2 className="font-display text-sm font-bold text-slate-100">Théorèmes & Hypothèses</h2>
             <button
+              type="button"
               onClick={addTheorem}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold"
             >
               <Plus className="w-3.5 h-3.5" /> Ajouter un théorème
             </button>
           </div>
 
           {formData.theorems.map((thm, idx) => (
-            <div key={thm.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <div className="flex items-center justify-between">
+            <div key={thm.id} className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
                 <input
                   type="text"
                   value={thm.name}
@@ -233,11 +236,13 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].name = e.target.value;
                     setFormData({ ...formData, theorems: updated });
                   }}
-                  className="font-bold text-sm bg-transparent border-b border-slate-700 text-indigo-300 focus:outline-none focus:border-indigo-500 pb-1"
+                  className="flex-1 font-semibold text-sm bg-transparent border-b border-white/[0.12] text-sky-300 focus:outline-none focus:border-amber-400/60 pb-1"
                 />
                 <button
+                  type="button"
                   onClick={() => removeTheorem(thm.id)}
-                  className="text-slate-500 hover:text-red-400 p-1"
+                  aria-label={`Supprimer ${thm.name}`}
+                  className="text-slate-500 hover:text-rose-400 p-1"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -253,10 +258,10 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     setFormData({ ...formData, theorems: updated });
                   }}
                   rows={2}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-400/60"
                 />
-                <div className="mt-1 p-2 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
-                  <span className="text-[10px] text-slate-500 block text-left mb-1">Aperçu direct :</span>
+                <div className="mt-2 p-3 rounded-xl bg-[#04060C] border border-white/[0.07] text-center">
+                  <span className="text-[10px] text-slate-400 block text-left mb-1">Aperçu direct :</span>
                   <MathView math={thm.statement} block />
                 </div>
               </div>
@@ -271,12 +276,12 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     setFormData({ ...formData, theorems: updated });
                   }}
                   rows={3}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-slate-400 mb-1">Conseil d'Examen du Prof</label>
+                <label className="block text-xs text-slate-400 mb-1">Conseil d'examen</label>
                 <input
                   type="text"
                   value={thm.professorTip || ''}
@@ -285,7 +290,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].professorTip = e.target.value;
                     setFormData({ ...formData, theorems: updated });
                   }}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
             </div>
@@ -297,18 +302,19 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
       {activeTab === 'formulas' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Formules Magiques & Unités SI</h2>
+            <h2 className="font-display text-sm font-bold text-slate-100">Formules Magiques & Unités SI</h2>
             <button
+              type="button"
               onClick={addFormula}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold"
             >
               <Plus className="w-3.5 h-3.5" /> Ajouter une formule
             </button>
           </div>
 
           {formData.magicFormulas.map((fml, idx) => (
-            <div key={fml.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <div className="flex items-center justify-between">
+            <div key={fml.id} className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
                 <input
                   type="text"
                   value={fml.name}
@@ -317,11 +323,13 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].name = e.target.value;
                     setFormData({ ...formData, magicFormulas: updated });
                   }}
-                  className="font-bold text-sm bg-transparent border-b border-slate-700 text-blue-300 focus:outline-none focus:border-indigo-500 pb-1"
+                  className="flex-1 font-semibold text-sm bg-transparent border-b border-white/[0.12] text-amber-300 focus:outline-none focus:border-amber-400/60 pb-1"
                 />
                 <button
+                  type="button"
                   onClick={() => removeFormula(fml.id)}
-                  className="text-slate-500 hover:text-red-400 p-1"
+                  aria-label={`Supprimer ${fml.name}`}
+                  className="text-slate-500 hover:text-rose-400 p-1"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -337,9 +345,9 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].formula = e.target.value;
                     setFormData({ ...formData, magicFormulas: updated });
                   }}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white font-mono focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white font-mono focus:outline-none focus:border-amber-400/60"
                 />
-                <div className="mt-1 p-2 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
+                <div className="mt-2 p-3 rounded-xl bg-[#04060C] border border-white/[0.07] text-center">
                   <MathView math={fml.formula} block />
                 </div>
               </div>
@@ -354,7 +362,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     setFormData({ ...formData, magicFormulas: updated });
                   }}
                   rows={2}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
 
@@ -368,7 +376,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].validityDomain = e.target.value;
                     setFormData({ ...formData, magicFormulas: updated });
                   }}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
             </div>
@@ -380,18 +388,19 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
       {activeTab === 'methods' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Méthodes Pas à Pas</h2>
+            <h2 className="font-display text-sm font-bold text-slate-100">Méthodes Pas à Pas</h2>
             <button
+              type="button"
               onClick={addMethod}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold"
             >
               <Plus className="w-3.5 h-3.5" /> Ajouter une méthode
             </button>
           </div>
 
           {formData.stepByStepMethods.map((mth, idx) => (
-            <div key={mth.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
-              <div className="flex items-center justify-between">
+            <div key={mth.id} className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
                 <input
                   type="text"
                   value={mth.goal}
@@ -400,11 +409,13 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].goal = e.target.value;
                     setFormData({ ...formData, stepByStepMethods: updated });
                   }}
-                  className="font-bold text-sm bg-transparent border-b border-slate-700 text-emerald-300 focus:outline-none focus:border-indigo-500 pb-1"
+                  className="flex-1 font-semibold text-sm bg-transparent border-b border-white/[0.12] text-emerald-300 focus:outline-none focus:border-amber-400/60 pb-1"
                 />
                 <button
+                  type="button"
                   onClick={() => removeMethod(mth.id)}
-                  className="text-slate-500 hover:text-red-400 p-1"
+                  aria-label={`Supprimer ${mth.goal}`}
+                  className="text-slate-500 hover:text-rose-400 p-1"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -420,7 +431,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     setFormData({ ...formData, stepByStepMethods: updated });
                   }}
                   rows={4}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
 
@@ -434,7 +445,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].trapToAvoid = e.target.value;
                     setFormData({ ...formData, stepByStepMethods: updated });
                   }}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
             </div>
@@ -446,16 +457,17 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
       {activeTab === 'traps' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Pièges d'Examen</h2>
+            <h2 className="font-display text-sm font-bold text-slate-100">Pièges d'Examen</h2>
             <button
+              type="button"
               onClick={addTrap}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold"
             >
               <Plus className="w-3.5 h-3.5" /> Ajouter un piège
             </button>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+          <div className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-5 space-y-3">
             {formData.examTraps.map((trap, idx) => (
               <div key={idx} className="flex items-center gap-2">
                 <input
@@ -466,11 +478,13 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx] = e.target.value;
                     setFormData({ ...formData, examTraps: updated });
                   }}
-                  className="flex-1 rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="flex-1 rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
                 <button
+                  type="button"
                   onClick={() => removeTrap(idx)}
-                  className="text-slate-500 hover:text-red-400 p-2"
+                  aria-label={`Supprimer le piège ${idx + 1}`}
+                  className="text-slate-500 hover:text-rose-400 p-2"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -484,22 +498,25 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
       {activeTab === 'flashcards' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Cartes Réflexes (Flashcards)</h2>
+            <h2 className="font-display text-sm font-bold text-slate-100">Cartes Réflexes (Flashcards)</h2>
             <button
+              type="button"
               onClick={addFlashcard}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold"
             >
               <Plus className="w-3.5 h-3.5" /> Ajouter une flashcard
             </button>
           </div>
 
           {formData.flashcards.map((fc, idx) => (
-            <div key={fc.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+            <div key={fc.id} className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-indigo-400">Flashcard #{idx + 1}</span>
+                <span className="text-xs font-mono font-bold text-sky-400">Flashcard #{idx + 1}</span>
                 <button
+                  type="button"
                   onClick={() => removeFlashcard(fc.id)}
-                  className="text-slate-500 hover:text-red-400 p-1"
+                  aria-label={`Supprimer flashcard ${idx + 1}`}
+                  className="text-slate-500 hover:text-rose-400 p-1"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -515,7 +532,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].question = e.target.value;
                     setFormData({ ...formData, flashcards: updated });
                   }}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
 
@@ -529,7 +546,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     setFormData({ ...formData, flashcards: updated });
                   }}
                   rows={2}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
             </div>
@@ -541,22 +558,25 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
       {activeTab === 'quiz' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Quiz QCM</h2>
+            <h2 className="font-display text-sm font-bold text-slate-100">Quiz QCM</h2>
             <button
+              type="button"
               onClick={addQuizQuestion}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold"
             >
               <Plus className="w-3.5 h-3.5" /> Ajouter une question
             </button>
           </div>
 
           {formData.quiz.map((q, idx) => (
-            <div key={q.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+            <div key={q.id} className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-purple-400">Question #{idx + 1}</span>
+                <span className="text-xs font-mono font-bold text-amber-400">Question #{idx + 1}</span>
                 <button
+                  type="button"
                   onClick={() => removeQuizQuestion(q.id)}
-                  className="text-slate-500 hover:text-red-400 p-1"
+                  aria-label={`Supprimer question ${idx + 1}`}
+                  className="text-slate-500 hover:text-rose-400 p-1"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -572,7 +592,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     updated[idx].question = e.target.value;
                     setFormData({ ...formData, quiz: updated });
                   }}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
 
@@ -589,7 +609,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                         updated[idx].correctIndex = optIdx;
                         setFormData({ ...formData, quiz: updated });
                       }}
-                      className="text-indigo-600 focus:ring-indigo-500"
+                      className="accent-amber-500"
                     />
                     <input
                       type="text"
@@ -601,7 +621,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                         updated[idx].options = newOptions;
                         setFormData({ ...formData, quiz: updated });
                       }}
-                      className="flex-1 rounded-xl bg-slate-950 border border-slate-800 p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                      className="flex-1 rounded-xl bg-[#04060C] border border-white/[0.1] p-2 text-xs text-white focus:outline-none focus:border-amber-400/60"
                     />
                   </div>
                 ))}
@@ -617,7 +637,7 @@ export const SheetEditor: React.FC<SheetEditorProps> = ({ sheet, onSave, onCance
                     setFormData({ ...formData, quiz: updated });
                   }}
                   rows={2}
-                  className="w-full rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-2.5 text-xs text-white focus:outline-none focus:border-amber-400/60"
                 />
               </div>
             </div>

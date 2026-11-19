@@ -1,18 +1,14 @@
 import React, { useState } from 'react';
-import { 
-  Search, 
-  Filter, 
-  Sparkles, 
-  ChevronDown, 
-  ChevronUp, 
-  HelpCircle, 
-  CheckCircle, 
-  Clock, 
-  BookOpen, 
-  Loader2, 
-  Plus, 
-  Trash2, 
-  Star 
+import {
+  Search,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  HelpCircle,
+  CheckCircle,
+  BookOpen,
+  Loader2,
+  Trash2,
 } from 'lucide-react';
 import { TDExercise, ExerciseStatus, DifficultyLevel } from '../../types/course';
 import { MathView } from '../common/MathView';
@@ -38,16 +34,13 @@ export const TDSection: React.FC<TDSectionProps> = ({
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<ExerciseStatus | 'all'>('all');
 
-  // Dépliages des cartes
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [revealedHints, setRevealedHints] = useState<Record<string, number>>({});
   const [revealedSolutions, setRevealedSolutions] = useState<Record<string, boolean>>({});
   const [cloningId, setCloningId] = useState<string | null>(null);
 
-  // Extraire les chapitres disponibles
   const chapters = Array.from(new Set(exercises.map(e => e.chapter))).filter(Boolean);
 
-  // Filtrage
   const filteredExercises = exercises.filter(e => {
     if (selectedSubjectId !== 'all' && e.subjectId !== selectedSubjectId) return false;
     if (selectedChapter !== 'all' && e.chapter !== selectedChapter) return false;
@@ -65,7 +58,7 @@ export const TDSection: React.FC<TDSectionProps> = ({
   });
 
   const toggleCard = (id: string) => {
-    setExpandedCards(prev => ({ ...prev, [id]: !prev[id] }));
+    setExpandedCards(prev => ({ ...prev, [id]: !(prev[id] ?? true) }));
   };
 
   const handleRevealNextHint = (id: string, maxHints: number) => {
@@ -91,7 +84,6 @@ export const TDSection: React.FC<TDSectionProps> = ({
     try {
       const cloned = (await generateSimilarExercise(exercise, 'td')) as TDExercise;
       onAddExercise(cloned);
-      // Ouvre immédiatement la nouvelle carte générée
       setExpandedCards(prev => ({ ...prev, [cloned.id]: true }));
     } catch (err) {
       console.error('Erreur clonage IA', err);
@@ -102,91 +94,92 @@ export const TDSection: React.FC<TDSectionProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Barre supérieure : Recherche & Filtres ergonomiques */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3.5">
+      {/* Search & Filters */}
+      <div className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-4 sm:p-5 space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
-          {/* Recherche textuelle */}
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              aria-label="Rechercher un exercice de TD"
               placeholder="Rechercher par titre, notion, mot-clé, énoncé..."
-              className="w-full rounded-xl bg-slate-950/80 border border-slate-800 pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] pl-10 pr-4 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-400/60 transition-colors"
             />
           </div>
 
-          {/* Filtre Chapitre */}
           {chapters.length > 0 && (
             <div className="sm:w-64">
               <select
                 value={selectedChapter}
                 onChange={e => setSelectedChapter(e.target.value)}
-                className="w-full rounded-xl bg-slate-950/80 border border-slate-800 px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500 cursor-pointer"
+                aria-label="Filtrer par chapitre"
+                className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-400/60 cursor-pointer"
               >
                 <option value="all">Tous les chapitres ({exercises.length})</option>
                 {chapters.map(ch => (
-                  <option key={ch} value={ch}>{ch}</option>
+                  <option key={ch} value={ch}>
+                    {ch}
+                  </option>
                 ))}
               </select>
             </div>
           )}
         </div>
 
-        {/* Ligne des pastilles : Difficulté & Statut */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
-          {/* Filtres de difficulté */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-slate-500 font-semibold mr-1">Difficulté :</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-slate-400 font-medium mr-1">Difficulté :</span>
             {(['all', 1, 2, 3] as const).map(diff => (
               <button
                 key={diff}
+                type="button"
                 onClick={() => setSelectedDifficulty(diff)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                   selectedDifficulty === diff
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-amber-500 text-[#04060C]'
+                    : 'bg-[#04060C] text-slate-300 hover:text-white border border-white/[0.08]'
                 }`}
               >
                 {diff === 'all' && 'Toutes'}
-                {diff === 1 && '1 • Débutant'}
-                {diff === 2 && '2 • Intermédiaire'}
-                {diff === 3 && '3 • ESTACA ⭐'}
+                {diff === 1 && 'Niveau 1'}
+                {diff === 2 && 'Niveau 2'}
+                {diff === 3 && 'Niveau 3 · ESTACA'}
               </button>
             ))}
           </div>
 
-          {/* Filtres de statut */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-slate-500 font-semibold mr-1">Statut :</span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-slate-400 font-medium mr-1">Statut :</span>
             {(['all', 'todo', 'in_progress', 'completed'] as const).map(st => (
               <button
                 key={st}
+                type="button"
                 onClick={() => setSelectedStatus(st)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
                   selectedStatus === st
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800'
+                    ? 'bg-sky-500 text-[#04060C]'
+                    : 'bg-[#04060C] text-slate-300 hover:text-white border border-white/[0.08]'
                 }`}
               >
                 {st === 'all' && 'Tous'}
                 {st === 'todo' && 'À faire'}
                 {st === 'in_progress' && 'En cours'}
-                {st === 'completed' && 'Résolu ✓'}
+                {st === 'completed' && 'Résolu'}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Liste des exercices */}
+      {/* Exercise Cards */}
       {filteredExercises.length === 0 ? (
-        <div className="py-16 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800">
-          <BookOpen className="w-10 h-10 mx-auto opacity-30 text-slate-400 mb-2" />
-          <p className="text-sm">Aucun exercice de TD ne correspond à vos filtres.</p>
-          <p className="text-xs text-slate-600 mt-1">
-            Utilisez le bouton "Ingérer PDF / Cours" en haut pour charger une feuille de TD complète.
+        <div className="py-16 text-center text-slate-400 bg-[#0A0E19]/70 rounded-2xl border border-white/[0.08]">
+          <BookOpen className="w-10 h-10 mx-auto opacity-40 text-amber-400 mb-3" />
+          <p className="text-sm font-medium text-slate-200">Aucun exercice de TD ne correspond à vos filtres.</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Utilisez « Ingérer PDF » en haut pour importer une feuille de TD complète.
           </p>
         </div>
       ) : (
@@ -199,104 +192,109 @@ export const TDSection: React.FC<TDSectionProps> = ({
             const isCloningThis = cloningId === exercise.id;
 
             return (
-              <div
+              <article
                 key={exercise.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl shadow-xl overflow-hidden transition-all hover:border-slate-700/80"
+                className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors hover:border-white/[0.15]"
               >
-                {/* En-tête de carte pliable */}
-                <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/40 border-b border-slate-800/80">
-                  <div className="flex-1 cursor-pointer" onClick={() => toggleCard(exercise.id)}>
-                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                        {exercise.chapter}
-                      </span>
-                      <span className="text-[11px] px-2 py-0.5 rounded-md bg-slate-800 text-slate-400">
-                        Notion : {exercise.notion}
-                      </span>
-                      {/* Badge difficulté */}
+                <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0D1322]/60 border-b border-white/[0.06]">
+                  <button
+                    type="button"
+                    onClick={() => toggleCard(exercise.id)}
+                    aria-expanded={isExpanded}
+                    className="flex-1 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded-lg"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mb-1">
+                      <span className="text-sky-300 font-medium">{exercise.chapter}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{exercise.notion}</span>
+                      <span aria-hidden="true">·</span>
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                        className={`font-mono font-semibold ${
                           exercise.difficulty === 3
-                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                            ? 'text-amber-300'
                             : exercise.difficulty === 2
-                            ? 'bg-blue-500/20 text-blue-300'
-                            : 'bg-emerald-500/20 text-emerald-300'
+                            ? 'text-sky-300'
+                            : 'text-emerald-300'
                         }`}
                       >
-                        <Star className="w-3 h-3 fill-current" />
-                        Niveau {exercise.difficulty} / 3
+                        Niveau {exercise.difficulty}/3
                       </span>
                     </div>
 
-                    <h3 className="text-base font-bold text-white hover:text-indigo-300 transition-colors flex items-center gap-2">
+                    <h3 className="font-display text-base font-semibold text-slate-100 hover:text-amber-200 transition-colors">
                       {exercise.title}
                     </h3>
-                  </div>
+                  </button>
 
-                  {/* Contrôles d'état et actions */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {/* Sélecteur de statut */}
-                    <div className="flex items-center rounded-xl bg-slate-950 border border-slate-800 p-1">
+                    <div className="flex items-center rounded-xl bg-[#04060C] border border-white/[0.08] p-1">
                       <button
+                        type="button"
                         onClick={() => handleStatusChange(exercise, 'todo')}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors ${
-                          exercise.status === 'todo' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors whitespace-nowrap ${
+                          exercise.status === 'todo'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-400/30'
+                            : 'text-slate-400 hover:text-slate-100'
                         }`}
-                        title="À faire"
                       >
                         À faire
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleStatusChange(exercise, 'in_progress')}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors ${
-                          exercise.status === 'in_progress' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors whitespace-nowrap ${
+                          exercise.status === 'in_progress'
+                            ? 'bg-sky-500/20 text-sky-300 border border-sky-400/30'
+                            : 'text-slate-400 hover:text-slate-100'
                         }`}
-                        title="En cours"
                       >
                         En cours
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleStatusChange(exercise, 'completed')}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-colors ${
-                          exercise.status === 'completed' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-colors whitespace-nowrap ${
+                          exercise.status === 'completed'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30'
+                            : 'text-slate-400 hover:text-slate-100'
                         }`}
-                        title="Résolu"
                       >
-                        Résolu ✓
+                        Résolu
                       </button>
                     </div>
 
-                    {/* Déplier / Replier */}
                     <button
+                      type="button"
                       onClick={() => toggleCard(exercise.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                      aria-label={isExpanded ? `Replier ${exercise.title}` : `Déplier ${exercise.title}`}
+                      className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
                     >
                       {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Contenu de l'exercice (si déplié) */}
                 {isExpanded && (
                   <div className="p-5 space-y-4">
-                    {/* Énoncé */}
-                    <div className="text-xs text-slate-200 leading-relaxed bg-slate-950/70 p-4 rounded-xl border border-slate-800/80 whitespace-pre-wrap select-text font-sans">
+                    <div className="text-xs text-slate-200 leading-relaxed bg-[#04060C] p-4 rounded-xl border border-white/[0.07] whitespace-pre-wrap select-text">
                       <MathView math={exercise.statement} />
                     </div>
 
-                    {/* Zone des indices progressifs */}
                     {hintCount > 0 && (
                       <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
-                            <HelpCircle className="w-4 h-4" />
-                            Indices de recherche ({currentHintStep} / {hintCount} révélé{currentHintStep > 1 ? 's' : ''})
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                            <HelpCircle className="w-4 h-4 text-amber-400" />
+                            <span>
+                              Indices de recherche ({currentHintStep} / {hintCount})
+                            </span>
                           </span>
 
                           {currentHintStep < hintCount && (
                             <button
+                              type="button"
                               onClick={() => handleRevealNextHint(exercise.id, hintCount)}
-                              className="px-3 py-1 rounded-lg bg-amber-950/60 hover:bg-amber-900 border border-amber-800/60 text-amber-300 text-xs font-semibold transition-colors"
+                              className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-200 text-xs font-semibold transition-colors"
                             >
                               Révéler l'indice {currentHintStep + 1}
                             </button>
@@ -304,14 +302,14 @@ export const TDSection: React.FC<TDSectionProps> = ({
                         </div>
 
                         {currentHintStep > 0 && (
-                          <div className="space-y-1.5 animate-fade-in">
+                          <div className="space-y-2 animate-fade-in">
                             {exercise.hints.slice(0, currentHintStep).map((hint, hIdx) => (
                               <div
                                 key={hIdx}
-                                className="p-3 rounded-xl bg-amber-950/20 border border-amber-900/40 text-xs text-amber-200/90 flex items-start gap-2"
+                                className="p-3 rounded-xl bg-[#04060C] border border-amber-400/25 text-xs text-amber-100/90 flex items-start gap-2.5"
                               >
-                                <span className="font-bold text-amber-400 font-mono">#{hIdx + 1}</span>
-                                <div className="flex-1">
+                                <span className="font-bold text-amber-400 font-mono">0{hIdx + 1}</span>
+                                <div className="flex-1 leading-relaxed">
                                   <MathView math={hint} />
                                 </div>
                               </div>
@@ -321,58 +319,64 @@ export const TDSection: React.FC<TDSectionProps> = ({
                       </div>
                     )}
 
-                    {/* Solution détaillée pas à pas */}
-                    <div className="pt-2 border-t border-slate-800/60">
+                    <div className="pt-2 border-t border-white/[0.06]">
                       <button
+                        type="button"
                         onClick={() => toggleSolution(exercise.id)}
-                        className={`w-full py-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                        className={`w-full py-2.5 px-4 rounded-xl border text-xs font-semibold transition-colors flex items-center justify-center gap-2 ${
                           isSolutionVisible
-                            ? 'bg-slate-800 border-slate-700 text-white'
-                            : 'bg-indigo-950/50 hover:bg-indigo-900/60 border-indigo-800/50 text-indigo-300'
+                            ? 'bg-[#101625] border-white/[0.15] text-slate-100'
+                            : 'bg-[#04060C] hover:bg-[#101625] border-emerald-400/30 text-emerald-300'
                         }`}
                       >
                         <CheckCircle className="w-4 h-4 text-emerald-400" />
-                        <span>{isSolutionVisible ? 'Masquer la correction détaillée' : 'Révéler la correction détaillée pas à pas'}</span>
+                        <span>
+                          {isSolutionVisible
+                            ? 'Masquer la correction détaillée'
+                            : 'Révéler la correction détaillée pas à pas'}
+                        </span>
                       </button>
 
                       {isSolutionVisible && (
-                        <div className="mt-3 p-4 rounded-xl bg-slate-950 border border-emerald-900/30 text-xs text-slate-200 space-y-2 whitespace-pre-wrap font-sans select-text animate-fade-in">
+                        <div className="mt-3 p-4 rounded-xl bg-[#04060C] border border-emerald-400/25 text-xs text-slate-200 space-y-2 whitespace-pre-wrap select-text animate-fade-in leading-relaxed">
                           <MathView math={exercise.solution} />
                         </div>
                       )}
                     </div>
 
-                    {/* Footer de carte : Bouton Générer similaire via IA & Supprimer */}
-                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-between">
+                    <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between gap-2">
                       <button
+                        type="button"
                         onClick={() => handleCloneExercise(exercise)}
                         disabled={isCloningThis}
-                        className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition-all active:scale-95 disabled:opacity-50"
+                        className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#101625] hover:bg-[#172036] text-amber-200 border border-amber-400/30 text-xs font-semibold transition-colors disabled:opacity-50"
                       >
                         {isCloningThis ? (
                           <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-                            <span>Génération d'une variante IA...</span>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                            <span>Génération en cours...</span>
                           </>
                         ) : (
                           <>
-                            <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                             <span>Générer un exercice similaire via IA</span>
                           </>
                         )}
                       </button>
 
                       <button
+                        type="button"
                         onClick={() => onDeleteExercise(exercise.id)}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
+                        aria-label={`Supprimer ${exercise.title}`}
                         title="Supprimer cet exercice"
+                        className="p-2 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-white/[0.05] transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
                 )}
-              </div>
+              </article>
             );
           })}
         </div>
