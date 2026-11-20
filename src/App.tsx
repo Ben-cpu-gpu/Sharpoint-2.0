@@ -14,6 +14,7 @@ import { MobileBottomNav } from './components/common/MobileBottomNav';
 import { ApiKeyModal } from './components/common/ApiKeyModal';
 import { DebugDrawer } from './components/common/DebugDrawer';
 import { IngestionModal } from './components/common/IngestionModal';
+import { KatexRepairModal } from './components/common/KatexRepairModal';
 import { SolarSystemNav } from './components/common/SolarSystemNav';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { CloudSyncState, MobileAuthError } from './components/common/CloudSyncControl';
@@ -96,6 +97,8 @@ export const App: React.FC = () => {
   const [isRevisionOpen, setIsRevisionOpen] = useState(false);
   const [revisionInitialMode, setRevisionInitialMode] = useState<'flashcards' | 'quiz'>('flashcards');
   const [isIngestionOpen, setIsIngestionOpen] = useState(false);
+  const [isKatexRepairOpen, setIsKatexRepairOpen] = useState(false);
+  const [repairKatexInitial, setRepairKatexInitial] = useState('');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [apiModalInitialTab, setApiModalInitialTab] = useState<AIProvider | undefined>(undefined);
   const [isTestingAll, setIsTestingAll] = useState(false);
@@ -126,6 +129,21 @@ export const App: React.FC = () => {
       return next;
     });
   };
+
+  useEffect(() => {
+    const handleGlobalKatexClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('.katex-repair-trigger');
+      if (target) {
+        const rawLatex = target.getAttribute('data-latex');
+        if (rawLatex) {
+          setRepairKatexInitial(decodeURIComponent(rawLatex));
+          setIsKatexRepairOpen(true);
+        }
+      }
+    };
+    document.addEventListener('click', handleGlobalKatexClick);
+    return () => document.removeEventListener('click', handleGlobalKatexClick);
+  }, []);
 
   const latestLocalDataRef = useRef({ sheets, tdExercises, annales });
   latestLocalDataRef.current = { sheets, tdExercises, annales };
@@ -761,6 +779,10 @@ export const App: React.FC = () => {
             onTabChange={setCurrentTab}
             onOpenIngest={() => setIsIngestionOpen(true)}
             onOpenSettings={() => handleOpenDashboard()}
+            onOpenKatexRepair={() => {
+              setRepairKatexInitial('');
+              setIsKatexRepairOpen(true);
+            }}
             onManualSave={handleManualSave}
             lastSavedTime={lastSavedTime}
             onExportJson={handleExportJson}
@@ -1116,6 +1138,15 @@ export const App: React.FC = () => {
             onAnnalesCreated={handleAnnalesIngested}
           />
         )}
+
+        <KatexRepairModal
+          isOpen={isKatexRepairOpen}
+          initialLatex={repairKatexInitial}
+          onClose={() => setIsKatexRepairOpen(false)}
+          onFixed={_fixed => {
+            showToast('Formule KaTeX corrigée copiée / prête.');
+          }}
+        />
 
         <OfflineIndicator />
 

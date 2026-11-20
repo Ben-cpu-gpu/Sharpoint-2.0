@@ -11,6 +11,7 @@ import {
   ChevronDown,
   Focus,
   Orbit,
+  Wand2,
 } from 'lucide-react';
 import { getSelectedModel, ALL_MODELS, hasActiveKeyForCurrentModel, getSelectedProvider } from '../../services/apiKeyService';
 
@@ -26,6 +27,7 @@ interface HeaderProps {
   onTabChange: (tab: MainTab) => void;
   onOpenIngest: () => void;
   onOpenSettings: () => void;
+  onOpenKatexRepair: () => void;
   onManualSave: () => void;
   lastSavedTime: string | null;
   onExportJson: () => void;
@@ -54,6 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   onOpenIngest,
   onOpenSettings,
+  onOpenKatexRepair,
   onManualSave,
   lastSavedTime,
   onExportJson,
@@ -202,6 +205,17 @@ export const Header: React.FC<HeaderProps> = ({
               }`}
             />
             <ChevronDown className="hidden sm:inline w-3 h-3 text-slate-400" />
+          </button>
+
+          <button
+            type="button"
+            onClick={onOpenKatexRepair}
+            aria-label="Ouvrir le réparateur KaTeX IA"
+            title="Assistant de réparation KaTeX & LaTeX"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-amber-400/35 text-xs font-semibold text-amber-300 transition-colors whitespace-nowrap shrink-0"
+          >
+            <Wand2 className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden xl:inline">KaTeX AI</span>
           </button>
 
           <button

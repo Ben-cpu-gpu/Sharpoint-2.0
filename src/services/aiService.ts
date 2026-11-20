@@ -786,7 +786,7 @@ export async function testProviderHealth(
  * 2. Toutes les API gratuites configurées (Groq -> Cerebras -> Mistral -> OpenRouter :free) et tous leurs modèles disponibles
  * 3. Mode Local uniquement en dernier recours après consentement explicite
  */
-async function executeWithFallback<T>(
+export async function executeWithFallback<T>(
   systemPrompt: string,
   userPrompt: string,
   validator: (parsed: any) => T,
