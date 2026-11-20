@@ -55,6 +55,10 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
+            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+            handler: 'NetworkOnly',
+          },
+          {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
             options: {
@@ -79,12 +83,12 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/katex.*/i,
+            urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/npm\/(katex|pdfjs-dist).*/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'katex-cdn-cache',
+              cacheName: 'scientific-cdn-cache',
               expiration: {
-                maxEntries: 20,
+                maxEntries: 30,
                 maxAgeSeconds: 60 * 60 * 24 * 90,
               },
               cacheableResponse: { statuses: [0, 200] },

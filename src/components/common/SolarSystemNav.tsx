@@ -39,13 +39,14 @@ interface SolarSystemNavProps {
   onTestProvider: (provider: AIProvider) => Promise<ProviderHealthResult>;
   onTestAllProviders: () => Promise<void>;
   isTestingAll: boolean;
+  focusMode?: boolean;
 }
 
 const API_PROVIDER_ORDER: AIProvider[] = [
   'gemini',
-  'claude',
-  'openai',
   'groq',
+  'cerebras',
+  'mistral',
   'openrouter',
   'local',
 ];
@@ -56,38 +57,38 @@ const PROVIDER_META: Record<
 > = {
   gemini: {
     shortLabel: '1 · Gemini',
-    dashboardLabel: 'Gemini (Google AI)',
-    rankTag: '1er · Gratuit',
+    dashboardLabel: 'Gemini (Google Serveur)',
+    rankTag: '1er · Prioritaire',
     isFree: true,
-  },
-  claude: {
-    shortLabel: '2 · Claude',
-    dashboardLabel: 'Anthropic Claude',
-    rankTag: '2e · Relais',
-    isFree: false,
-  },
-  openai: {
-    shortLabel: '3 · ChatGPT',
-    dashboardLabel: 'OpenAI ChatGPT',
-    rankTag: '3e · Relais',
-    isFree: false,
   },
   groq: {
     shortLabel: 'Groq Gratuit',
     dashboardLabel: 'Groq Cloud (Llama/Qwen)',
-    rankTag: 'Gratuit · Rapide',
+    rankTag: '2e · Sans CB',
+    isFree: true,
+  },
+  cerebras: {
+    shortLabel: 'Cerebras',
+    dashboardLabel: 'Cerebras (1M tok/j)',
+    rankTag: '3e · Sans CB',
+    isFree: true,
+  },
+  mistral: {
+    shortLabel: 'Mistral AI',
+    dashboardLabel: 'Mistral Experiment',
+    rankTag: '4e · Français',
     isFree: true,
   },
   openrouter: {
     shortLabel: 'OpenRouter',
     dashboardLabel: 'OpenRouter (:free)',
-    rankTag: 'Gratuit · :free',
+    rankTag: '5e · :free 0€',
     isFree: true,
   },
   local: {
-    shortLabel: '4 · Local',
+    shortLabel: '6 · Local',
     dashboardLabel: 'Mode Local (Navigateur)',
-    rankTag: '4e · Dernier recours',
+    rankTag: 'Dernier recours',
     isFree: true,
   },
 };
@@ -130,10 +131,12 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
   onTestProvider,
   onTestAllProviders,
   isTestingAll,
+  focusMode = false,
 }) => {
   const [isSunHovered, setIsSunHovered] = useState(false);
   const [isSunClicked, setIsSunClicked] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [tilt, setTilt] = useState<{ rx: number; ry: number }>({ rx: 0, ry: 0 });
 
   const selectedModelId = getSelectedModel();
   const selectedProvider = getSelectedProvider();
@@ -248,14 +251,16 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
     };
   };
 
-  const workingCloudCount = (['gemini', 'claude', 'openai', 'groq', 'openrouter'] as CloudAIProvider[]).filter(
+  const workingCloudCount = (['gemini', 'groq', 'cerebras', 'mistral', 'openrouter'] as CloudAIProvider[]).filter(
     p => healthMap[p]?.status === 'ok' || hasKeyForProvider(p)
   ).length;
 
   return (
     <section
       aria-label="Observatoire du Système Solaire et Tableau de Bord IA"
-      className="rounded-2xl bg-[#070B14]/90 border border-white/[0.09] backdrop-blur-xl overflow-hidden shadow-[0_24px_60px_-28px_rgba(0,0,0,0.9)]"
+      className={`rounded-2xl border border-white/[0.09] overflow-hidden shadow-[0_24px_60px_-28px_rgba(0,0,0,0.9)] ${
+        focusMode ? 'bg-[#070B14]/96' : 'bg-[#070B14]/76'
+      }`}
     >
       {/* Barre supérieure compacte de l'observatoire */}
       <div className="px-4 sm:px-5 py-3 border-b border-white/[0.08] bg-[#04060C]/75 flex flex-wrap items-center justify-between gap-3">
@@ -311,12 +316,36 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
       {!isCollapsed && (
         <div className="grid grid-cols-1 xl:grid-cols-12">
           {/* STAGE CENTRAL : SYSTÈME SOLAIRE */}
-          <div className="xl:col-span-8 p-3 sm:p-5 border-b xl:border-b-0 xl:border-r border-white/[0.08] bg-[radial-gradient(circle_at_50%_50%,rgba(245,158,11,0.08)_0%,rgba(56,189,248,0.03)_42%,transparent_72%)]">
+          <div className="xl:col-span-8 min-w-0 p-3 sm:p-5 border-b xl:border-b-0 xl:border-r border-white/[0.08] bg-[radial-gradient(circle_at_50%_50%,rgba(245,158,11,0.08)_0%,rgba(56,189,248,0.03)_42%,transparent_72%)]">
             {/* DESKTOP ORBITAL CANVAS (lg+) */}
-            <div className="hidden lg:block w-full max-w-[960px] mx-auto">
+            <div
+              className="hidden lg:block w-full max-w-[960px] mx-auto"
+              style={focusMode ? undefined : { perspective: '1100px' }}
+              onMouseMove={
+                focusMode
+                  ? undefined
+                  : e => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const nx = (e.clientX - rect.left) / rect.width - 0.5;
+                      const ny = (e.clientY - rect.top) / rect.height - 0.5;
+                      setTilt({ rx: -ny * 9, ry: nx * 11 });
+                    }
+              }
+              onMouseLeave={focusMode ? undefined : () => setTilt({ rx: 0, ry: 0 })}
+            >
               <div
-                className="relative w-full select-none"
-                style={{ aspectRatio: `${SOLAR_CANVAS_WIDTH} / ${SOLAR_CANVAS_HEIGHT}` }}
+                className={`relative w-full select-none transition-transform duration-300 ease-out ${
+                  !focusMode && tilt.rx === 0 && tilt.ry === 0 ? 'solar-stage-idle-3d' : ''
+                }`}
+                style={{
+                  aspectRatio: `${SOLAR_CANVAS_WIDTH} / ${SOLAR_CANVAS_HEIGHT}`,
+                  transform: focusMode
+                    ? 'none'
+                    : tilt.rx !== 0 || tilt.ry !== 0
+                    ? `rotateX(${tilt.rx.toFixed(2)}deg) rotateY(${tilt.ry.toFixed(2)}deg)`
+                    : undefined,
+                  transformStyle: focusMode ? undefined : 'preserve-3d',
+                }}
               >
                 {/* SVG Orbits & Vectors */}
                 <svg
@@ -451,6 +480,30 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
                   Toutes matières ({subjects.length})
                 </button>
 
+                {/* GYROSCOPE 3D AUTOUR DU SOLEIL (supprimé en Mode Focus) */}
+                {!focusMode && (
+                  <div
+                    aria-hidden="true"
+                    data-testid="solar-3d-gyro"
+                    className="absolute pointer-events-none z-25"
+                    style={{
+                      left: `${((layout.cx - layout.sunRadius * 1.95) / layout.width) * 100}%`,
+                      top: `${((layout.cy - layout.sunRadius * 1.95) / layout.height) * 100}%`,
+                      width: `${((layout.sunRadius * 3.9) / layout.width) * 100}%`,
+                      height: `${((layout.sunRadius * 3.9) / layout.height) * 100}%`,
+                      transformStyle: 'preserve-3d',
+                      transform: 'translateZ(34px)',
+                    }}
+                  >
+                    <div className="solar-gyro-a absolute inset-0 rounded-full border-2 border-amber-400/60 shadow-[0_0_24px_rgba(245,158,11,0.45)]">
+                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-amber-300 shadow-[0_0_10px_#FDE68A]" />
+                    </div>
+                    <div className="solar-gyro-b absolute inset-2 rounded-full border border-sky-400/65 shadow-[0_0_20px_rgba(56,189,248,0.4)]">
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-sky-300 shadow-[0_0_10px_#38BDF8]" />
+                    </div>
+                  </div>
+                )}
+
                 {/* CENTRE : LE SOLEIL ("Rajouter un pdf" -> change uniquement au survol / clic) */}
                 <button
                   type="button"
@@ -465,6 +518,7 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
                     top: `${((layout.cy - layout.sunRadius) / layout.height) * 100}%`,
                     width: `${((layout.sunRadius * 2) / layout.width) * 100}%`,
                     height: `${((layout.sunRadius * 2) / layout.height) * 100}%`,
+                    transform: focusMode ? undefined : 'translateZ(46px)',
                   }}
                   className={`absolute z-30 rounded-full flex flex-col items-center justify-center text-center px-2 transition-all duration-200 cursor-pointer border-2 focus:outline-none focus-visible:ring-4 focus-visible:ring-amber-300/60 ${
                     sunEngaged
@@ -619,7 +673,24 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
             {/* VUE COMPACTE MOBILE / TABLETTE (< lg) */}
             <div className="lg:hidden space-y-4">
               {/* Soleil Mobile */}
-              <div className="flex flex-col items-center py-2">
+              <div
+                className="relative flex flex-col items-center justify-center py-5"
+                style={focusMode ? undefined : { perspective: '700px' }}
+              >
+                {!focusMode && (
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute w-44 h-44 flex items-center justify-center"
+                    style={{ transformStyle: 'preserve-3d' }}
+                  >
+                    <div className="solar-gyro-a absolute inset-0 rounded-full border-2 border-amber-400/55 shadow-[0_0_20px_rgba(245,158,11,0.4)]">
+                      <span className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-amber-300" />
+                    </div>
+                    <div className="solar-gyro-b absolute inset-3 rounded-full border border-sky-400/60 shadow-[0_0_16px_rgba(56,189,248,0.35)]">
+                      <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-sky-300" />
+                    </div>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={handleSunClick}
@@ -627,7 +698,7 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
                   onMouseLeave={() => setIsSunHovered(false)}
                   onFocus={() => setIsSunHovered(true)}
                   onBlur={() => setIsSunHovered(false)}
-                  className={`w-28 h-28 rounded-full flex flex-col items-center justify-center text-center px-3 border-2 transition-all ${
+                  className={`relative z-10 w-28 h-28 rounded-full flex flex-col items-center justify-center text-center px-3 border-2 transition-all ${
                     sunEngaged
                       ? 'bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500 text-[#04060C] border-amber-100 shadow-[0_0_32px_rgba(245,158,11,0.65)]'
                       : 'bg-gradient-to-br from-amber-400 via-amber-500 to-orange-600 text-[#04060C] border-amber-200/80 shadow-[0_0_24px_rgba(245,158,11,0.45)]'
@@ -751,7 +822,11 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
           </div>
 
           {/* PANNEAU DROIT : TABLEAU DE BORD SANTÉ DES CLÉS & MODÈLES GRATUITS */}
-          <aside className="xl:col-span-4 p-4 sm:p-5 bg-[#050811]/95 flex flex-col justify-between gap-4">
+          <aside
+            className={`xl:col-span-4 min-w-0 p-4 sm:p-5 flex flex-col justify-between gap-4 ${
+              focusMode ? 'bg-[#050811]/95' : 'bg-[#050811]/82'
+            }`}
+          >
             <div className="space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>

@@ -6,14 +6,21 @@ if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
 }
 
+export interface PdfExtractionProgress {
+  current: number;
+  total: number;
+  pageText: string;
+  accumulatedText: string;
+}
+
 /**
  * Extrait l'intégralité du texte d'un fichier PDF directement dans le navigateur (100% Client-Side)
  * @param file Fichier PDF issu d'un input file ou drag-and-drop
- * @param onProgress Callback de progression (page actuelle, total de pages)
+ * @param onProgress Callback de progression réelle (page actuelle, total, texte de la page, texte cumulé)
  */
 export async function extractTextFromPdf(
   file: File | ArrayBuffer,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (progress: PdfExtractionProgress) => void
 ): Promise<string> {
   try {
     let arrayBuffer: ArrayBuffer;
@@ -33,11 +40,16 @@ export async function extractTextFromPdf(
     const numPages = pdfDoc.numPages;
     let fullText = '';
 
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      if (onProgress) {
-        onProgress(pageNum, numPages);
-      }
+    if (onProgress) {
+      onProgress({
+        current: 0,
+        total: numPages,
+        pageText: '',
+        accumulatedText: '',
+      });
+    }
 
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
       const page = await pdfDoc.getPage(pageNum);
       const textContent = await page.getTextContent();
 
@@ -62,6 +74,15 @@ export async function extractTextFromPdf(
       }
 
       fullText += `--- [Page ${pageNum}/${numPages}] ---\n${pageText}\n\n`;
+
+      if (onProgress) {
+        onProgress({
+          current: pageNum,
+          total: numPages,
+          pageText,
+          accumulatedText: fullText.trim(),
+        });
+      }
     }
 
     return fullText.trim();

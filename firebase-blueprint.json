@@ -33,7 +33,7 @@
     },
     "UserSettings": {
       "title": "UserSettings",
-      "description": "Préférences IA et clés API de relais optionnelles (Claude, OpenAI, Groq, OpenRouter) isolées par utilisateur.",
+      "description": "Préférences IA et clés API gratuites optionnelles (Groq, Cerebras, Mistral, OpenRouter) isolées par utilisateur.",
       "type": "object",
       "properties": {
         "ownerId": {
@@ -51,23 +51,23 @@
         },
         "selectedProvider": {
           "type": "string",
-          "enum": ["gemini", "claude", "openai", "groq", "openrouter", "local"],
+          "enum": ["gemini", "groq", "cerebras", "mistral", "openrouter", "local"],
           "description": "Fournisseur IA actif."
-        },
-        "claudeKey": {
-          "type": "string",
-          "maxLength": 512,
-          "description": "Clé API Anthropic Claude optionnelle."
-        },
-        "openaiKey": {
-          "type": "string",
-          "maxLength": 512,
-          "description": "Clé API OpenAI optionnelle."
         },
         "groqKey": {
           "type": "string",
           "maxLength": 512,
           "description": "Clé API Groq Cloud optionnelle."
+        },
+        "cerebrasKey": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Clé API Cerebras Inference optionnelle."
+        },
+        "mistralKey": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Clé API Mistral AI (Experiment gratuit) optionnelle."
         },
         "openrouterKey": {
           "type": "string",
@@ -89,9 +89,9 @@
         "ownerId",
         "selectedModel",
         "selectedProvider",
-        "claudeKey",
-        "openaiKey",
         "groqKey",
+        "cerebrasKey",
+        "mistralKey",
         "openrouterKey",
         "createdAt",
         "updatedAt"

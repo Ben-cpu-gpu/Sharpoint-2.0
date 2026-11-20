@@ -21,12 +21,12 @@ import {
 } from 'lucide-react';
 import {
   getServerGeminiConfigured,
-  getAnthropicApiKey,
-  setAnthropicApiKey,
-  getOpenAIApiKey,
-  setOpenAIApiKey,
   getGroqApiKey,
   setGroqApiKey,
+  getCerebrasApiKey,
+  setCerebrasApiKey,
+  getMistralApiKey,
+  setMistralApiKey,
   getOpenRouterApiKey,
   setOpenRouterApiKey,
   getSelectedModel,
@@ -63,11 +63,11 @@ const DASHBOARD_PROVIDERS: Array<{
   isFree: boolean;
 }> = [
   { id: 'gemini', label: 'Gemini (Serveur)', rank: '1er · Prioritaire', isFree: true },
-  { id: 'claude', label: 'Anthropic Claude', rank: '2e · Relais', isFree: false },
-  { id: 'openai', label: 'OpenAI ChatGPT', rank: '3e · Relais', isFree: false },
-  { id: 'groq', label: 'Groq Cloud', rank: 'Gratuit · Ultra-rapide', isFree: true },
-  { id: 'openrouter', label: 'OpenRouter (:free)', rank: 'Gratuit · 0€ officiel', isFree: true },
-  { id: 'local', label: 'Mode Local', rank: '4e · Dernier recours', isFree: true },
+  { id: 'groq', label: 'Groq Cloud', rank: '2e · Sans CB', isFree: true },
+  { id: 'cerebras', label: 'Cerebras Cloud', rank: '3e · 1M tok/j', isFree: true },
+  { id: 'mistral', label: 'Mistral Experiment', rank: '4e · Français', isFree: true },
+  { id: 'openrouter', label: 'OpenRouter (:free)', rank: '5e · 0€ officiel', isFree: true },
+  { id: 'local', label: 'Mode Local', rank: '6e · Dernier recours', isFree: true },
 ];
 
 export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
@@ -81,23 +81,23 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   isTestingAll,
 }) => {
   const [activeTab, setActiveTab] = useState<AIProvider>('gemini');
-  const [claudeKey, setClaudeKey] = useState('');
-  const [openaiKey, setOpenaiKey] = useState('');
   const [groqKey, setGroqKey] = useState('');
+  const [cerebrasKey, setCerebrasKey] = useState('');
+  const [mistralKey, setMistralKey] = useState('');
   const [openrouterKey, setOpenrouterKey] = useState('');
   const [selectedModel, setModel] = useState('gemini-4-hydrogen');
 
-  const [showClaudeKey, setShowClaudeKey] = useState(false);
-  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [showGroqKey, setShowGroqKey] = useState(false);
+  const [showCerebrasKey, setShowCerebrasKey] = useState(false);
+  const [showMistralKey, setShowMistralKey] = useState(false);
   const [showOpenrouterKey, setShowOpenrouterKey] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setClaudeKey(getAnthropicApiKey());
-      setOpenaiKey(getOpenAIApiKey());
       setGroqKey(getGroqApiKey());
+      setCerebrasKey(getCerebrasApiKey());
+      setMistralKey(getMistralApiKey());
       setOpenrouterKey(getOpenRouterApiKey());
       const m = getSelectedModel();
       setModel(m);
@@ -112,17 +112,17 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   const getDraftKeyForProvider = (provider: AIProvider): string => {
     if (provider === 'gemini') return isGeminiServerReady ? 'server' : '';
-    if (provider === 'claude') return claudeKey.trim();
-    if (provider === 'openai') return openaiKey.trim();
     if (provider === 'groq') return groqKey.trim();
+    if (provider === 'cerebras') return cerebrasKey.trim();
+    if (provider === 'mistral') return mistralKey.trim();
     if (provider === 'openrouter') return openrouterKey.trim();
     return 'local';
   };
 
   const getDraftKeysMap = (): Partial<Record<CloudAIProvider, string>> => ({
-    claude: claudeKey.trim(),
-    openai: openaiKey.trim(),
     groq: groqKey.trim(),
+    cerebras: cerebrasKey.trim(),
+    mistral: mistralKey.trim(),
     openrouter: openrouterKey.trim(),
   });
 
@@ -133,9 +133,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setAnthropicApiKey(claudeKey);
-    setOpenAIApiKey(openaiKey);
     setGroqApiKey(groqKey);
+    setCerebrasApiKey(cerebrasKey);
+    setMistralApiKey(mistralKey);
     setOpenRouterApiKey(openrouterKey);
     setSelectedModel(selectedModel);
     onKeysUpdated();
@@ -147,13 +147,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   };
 
   const handleClearAllKeys = () => {
-    setAnthropicApiKey('');
-    setOpenAIApiKey('');
     setGroqApiKey('');
+    setCerebrasApiKey('');
+    setMistralApiKey('');
     setOpenRouterApiKey('');
-    setClaudeKey('');
-    setOpenaiKey('');
     setGroqKey('');
+    setCerebrasKey('');
+    setMistralKey('');
     setOpenrouterKey('');
     onKeysUpdated();
   };
@@ -169,13 +169,13 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     await onTestProvider(provider, draftKey, modelToTest);
   };
 
-  const isClaudeConnected = claudeKey.trim().length > 10;
-  const isOpenaiConnected = openaiKey.trim().length > 10;
   const isGroqConnected = groqKey.trim().length > 10;
+  const isCerebrasConnected = cerebrasKey.trim().length > 10;
+  const isMistralConnected = mistralKey.trim().length > 10;
   const isOpenrouterConnected = openrouterKey.trim().length > 10;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
       <div
         role="dialog"
         aria-modal="true"
@@ -190,10 +190,18 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             </div>
             <div>
               <h2 className="font-display text-sm font-bold text-slate-100">
-                Tableau de Bord IA · Santé des API &amp; Modèles
+                Tableau de Bord IA · Gemini Prioritaire &amp; API Gratuits
               </h2>
               <p className="text-xs text-slate-400">
-                Gemini géré côté serveur + diagnostic en direct des modèles et relais gratuits
+                Gemini côté serveur en #1 + relais gratuits sélectionnés via{' '}
+                <a
+                  href="https://github.com/mnfst/awesome-free-llm-apis"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sky-400 hover:underline"
+                >
+                  awesome-free-llm-apis
+                </a>
               </p>
             </div>
           </div>
@@ -219,7 +227,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   <span>Vérification en direct des services IA</span>
                 </span>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Cascade par défaut : 1. Gemini (Serveur) → 2. Claude → 3. ChatGPT → (Groq / OpenRouter gratuits) → 4. Mode Local
+                  Cascade : 1. Gemini (Serveur) → Groq → Cerebras → Mistral → OpenRouter (:free) → Mode Local
                 </p>
               </div>
 
@@ -329,34 +337,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveTab('claude')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-colors ${
-                  activeTab === 'claude'
-                    ? 'bg-[#101625] border-sky-400/60 text-white'
-                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                <Zap className="w-4 h-4 mb-1 text-sky-400" />
-                <span className="font-semibold text-[11px]">2 · Claude</span>
-                <span className="text-[10px] text-slate-400">Relais #2</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab('openai')}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-colors ${
-                  activeTab === 'openai'
-                    ? 'bg-[#101625] border-emerald-400/60 text-white'
-                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
-                }`}
-              >
-                <Layers className="w-4 h-4 mb-1 text-emerald-400" />
-                <span className="font-semibold text-[11px]">3 · ChatGPT</span>
-                <span className="text-[10px] text-slate-400">Relais #3</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setActiveTab('groq')}
                 className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-colors ${
                   activeTab === 'groq'
@@ -367,6 +347,34 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 <Zap className="w-4 h-4 mb-1 text-emerald-300" />
                 <span className="font-semibold text-[11px]">Groq Cloud</span>
                 <span className="text-[10px] text-emerald-300">Gratuit sûr</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('cerebras')}
+                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-colors ${
+                  activeTab === 'cerebras'
+                    ? 'bg-[#101625] border-sky-400/60 text-white'
+                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
+                }`}
+              >
+                <Zap className="w-4 h-4 mb-1 text-sky-400" />
+                <span className="font-semibold text-[11px]">Cerebras</span>
+                <span className="text-[10px] text-emerald-300">1M tok/jour</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('mistral')}
+                className={`p-2.5 rounded-xl border flex flex-col items-center text-center transition-colors ${
+                  activeTab === 'mistral'
+                    ? 'bg-[#101625] border-amber-400/60 text-white'
+                    : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
+                }`}
+              >
+                <Layers className="w-4 h-4 mb-1 text-amber-300" />
+                <span className="font-semibold text-[11px]">Mistral AI</span>
+                <span className="text-[10px] text-emerald-300">Experiment</span>
               </button>
 
               <button
@@ -393,7 +401,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 }`}
               >
                 <Laptop className="w-4 h-4 mb-1 text-slate-300" />
-                <span className="font-semibold text-[11px]">4 · Mode Local</span>
+                <span className="font-semibold text-[11px]">6 · Mode Local</span>
                 <span className="text-[10px] text-slate-400">Dernier recours</span>
               </button>
             </div>
@@ -461,20 +469,20 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             </div>
           )}
 
-          {activeTab === 'claude' && (
-            <div className="space-y-3 p-4 rounded-xl bg-[#04060C] border border-white/[0.08]">
+          {activeTab === 'cerebras' && (
+            <div className="space-y-3 p-4 rounded-xl bg-[#04060C] border border-sky-400/20">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-semibold text-xs text-sky-300 flex items-center gap-1.5">
                   <Key className="w-3.5 h-3.5 text-sky-400" />
-                  <span>Clé API Anthropic Claude</span>
+                  <span>Clé API Cerebras Cloud (awesome-free-llm-apis · 1M tok/jour gratuits)</span>
                 </span>
                 <a
-                  href="https://console.anthropic.com/settings/keys"
+                  href="https://cloud.cerebras.ai"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-sky-400 hover:underline flex items-center gap-1 shrink-0"
                 >
-                  <span>console.anthropic.com</span>
+                  <span>cloud.cerebras.ai</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -482,25 +490,25 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input
-                    type={showClaudeKey ? 'text' : 'password'}
-                    value={claudeKey}
-                    onChange={e => setClaudeKey(e.target.value)}
-                    aria-label="Clé API Anthropic Claude"
-                    placeholder="sk-ant-api03-..."
+                    type={showCerebrasKey ? 'text' : 'password'}
+                    value={cerebrasKey}
+                    onChange={e => setCerebrasKey(e.target.value)}
+                    aria-label="Clé API Cerebras Cloud"
+                    placeholder="csk-..."
                     className="w-full rounded-xl bg-[#0A0E19] border border-white/[0.12] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400/60 font-mono pr-10"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowClaudeKey(!showClaudeKey)}
-                    aria-label={showClaudeKey ? 'Masquer la clé Claude' : 'Afficher la clé Claude'}
+                    onClick={() => setShowCerebrasKey(!showCerebrasKey)}
+                    aria-label={showCerebrasKey ? 'Masquer la clé Cerebras' : 'Afficher la clé Cerebras'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                   >
-                    {showClaudeKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showCerebrasKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleQuickTest('claude')}
+                  onClick={() => handleQuickTest('cerebras')}
                   className="px-3 py-2 rounded-xl bg-[#101625] hover:bg-[#161F36] border border-sky-400/40 text-sky-300 text-xs font-semibold shrink-0"
                 >
                   Tester cette clé
@@ -508,27 +516,27 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </div>
 
               <p className="text-[11px] text-slate-400">
-                {isClaudeConnected
-                  ? 'Clé Claude configurée.'
-                  : 'Optionnel : relais #2 pour Claude Sonnet 4 / Haiku 3.5.'}
+                {isCerebrasConnected
+                  ? 'Clé Cerebras configurée (Llama 3.3 70B & Qwen 3 32B ultra-rapides).'
+                  : 'Tier gratuit sans carte bancaire issu de awesome-free-llm-apis (1 million de tokens gratuits/jour).'}
               </p>
             </div>
           )}
 
-          {activeTab === 'openai' && (
-            <div className="space-y-3 p-4 rounded-xl bg-[#04060C] border border-white/[0.08]">
+          {activeTab === 'mistral' && (
+            <div className="space-y-3 p-4 rounded-xl bg-[#04060C] border border-amber-400/20">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-xs text-emerald-300 flex items-center gap-1.5">
-                  <Key className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Clé API OpenAI ChatGPT</span>
+                <span className="font-semibold text-xs text-amber-300 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Clé API Mistral AI (La Plateforme · Tier Experiment gratuit)</span>
                 </span>
                 <a
-                  href="https://platform.openai.com/api-keys"
+                  href="https://console.mistral.ai/api-keys"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-xs text-sky-400 hover:underline flex items-center gap-1 shrink-0"
                 >
-                  <span>platform.openai.com</span>
+                  <span>console.mistral.ai</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
@@ -536,35 +544,35 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input
-                    type={showOpenaiKey ? 'text' : 'password'}
-                    value={openaiKey}
-                    onChange={e => setOpenaiKey(e.target.value)}
-                    aria-label="Clé API OpenAI"
-                    placeholder="sk-proj-..."
-                    className="w-full rounded-xl bg-[#0A0E19] border border-white/[0.12] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-400/60 font-mono pr-10"
+                    type={showMistralKey ? 'text' : 'password'}
+                    value={mistralKey}
+                    onChange={e => setMistralKey(e.target.value)}
+                    aria-label="Clé API Mistral AI"
+                    placeholder="Clé API Mistral..."
+                    className="w-full rounded-xl bg-[#0A0E19] border border-white/[0.12] px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400/60 font-mono pr-10"
                   />
                   <button
                     type="button"
-                    onClick={() => setShowOpenaiKey(!showOpenaiKey)}
-                    aria-label={showOpenaiKey ? 'Masquer la clé OpenAI' : 'Afficher la clé OpenAI'}
+                    onClick={() => setShowMistralKey(!showMistralKey)}
+                    aria-label={showMistralKey ? 'Masquer la clé Mistral' : 'Afficher la clé Mistral'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                   >
-                    {showOpenaiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showMistralKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleQuickTest('openai')}
-                  className="px-3 py-2 rounded-xl bg-[#101625] hover:bg-[#161F36] border border-emerald-400/40 text-emerald-300 text-xs font-semibold shrink-0"
+                  onClick={() => handleQuickTest('mistral')}
+                  className="px-3 py-2 rounded-xl bg-[#101625] hover:bg-[#161F36] border border-amber-400/40 text-amber-300 text-xs font-semibold shrink-0"
                 >
                   Tester cette clé
                 </button>
               </div>
 
               <p className="text-[11px] text-slate-400">
-                {isOpenaiConnected
-                  ? 'Clé OpenAI configurée.'
-                  : 'Optionnel : relais #3 pour GPT-4o / GPT-4o mini.'}
+                {isMistralConnected
+                  ? 'Clé Mistral AI configurée (Mistral Small & Open Mistral Nemo).'
+                  : 'Tier gratuit Experiment sans carte bancaire (vérification téléphone) via awesome-free-llm-apis.'}
               </p>
             </div>
           )}
@@ -681,12 +689,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
             <div className="p-4 rounded-xl bg-[#04060C] border border-white/[0.12] text-slate-200 space-y-1.5">
               <p className="font-semibold text-xs text-slate-100 flex items-center gap-1.5">
                 <Laptop className="w-4 h-4 text-slate-300" />
-                <span>Mode Local · Dernier recours (4e)</span>
+                <span>Mode Local · Dernier recours (6e)</span>
               </p>
               <p className="text-xs text-slate-400 leading-relaxed">
-                L'application essaie toujours d'abord <strong className="text-slate-200">Gemini (Serveur)</strong>, puis{' '}
-                <strong className="text-slate-200">Claude</strong>, puis{' '}
-                <strong className="text-slate-200">ChatGPT</strong> (et vos relais gratuits Groq / OpenRouter si configurés).
+                Par défaut, l'application génère les fiches, exos et annales prioritairement avec{' '}
+                <strong className="text-slate-200">Gemini (Serveur)</strong>, puis bascule automatiquement vers vos API gratuites{' '}
+                <strong className="text-slate-200">Groq, Cerebras, Mistral ou OpenRouter (:free)</strong> si configurées.
                 L'extraction locale hors-ligne n'intervient qu'en dernier recours.
               </p>
             </div>

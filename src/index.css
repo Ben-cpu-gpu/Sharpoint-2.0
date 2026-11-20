@@ -123,11 +123,56 @@
   animation: spiderOpticPulse 1.1s ease-in-out infinite;
 }
 
+@keyframes solarGyroSpinA {
+  0% {
+    transform: rotateX(68deg) rotateY(-20deg) rotateZ(0deg);
+  }
+  100% {
+    transform: rotateX(68deg) rotateY(-20deg) rotateZ(360deg);
+  }
+}
+
+@keyframes solarGyroSpinB {
+  0% {
+    transform: rotateX(64deg) rotateY(24deg) rotateZ(360deg);
+  }
+  100% {
+    transform: rotateX(64deg) rotateY(24deg) rotateZ(0deg);
+  }
+}
+
+@keyframes solarRingFloat3D {
+  0%, 100% {
+    transform: rotateX(4deg) rotateY(-3deg);
+  }
+  50% {
+    transform: rotateX(-3deg) rotateY(4deg);
+  }
+}
+
+.solar-gyro-a {
+  transform-style: preserve-3d;
+  animation: solarGyroSpinA 12s linear infinite;
+}
+
+.solar-gyro-b {
+  transform-style: preserve-3d;
+  animation: solarGyroSpinB 16s linear infinite;
+}
+
+.solar-stage-idle-3d {
+  transform-style: preserve-3d;
+  animation: solarRingFloat3D 9s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
   .spider-leg-a,
   .spider-leg-b,
-  .spider-optic-pulse {
+  .spider-optic-pulse,
+  .solar-gyro-a,
+  .solar-gyro-b,
+  .solar-stage-idle-3d {
     animation: none;
   }
 }

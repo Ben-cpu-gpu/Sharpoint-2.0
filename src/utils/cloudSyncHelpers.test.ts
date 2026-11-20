@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   BLUEPRINT_LIMITS,
   mergeLocalAndCloudById,
+  mergeRelaySettings,
   sanitizeFirestoreId,
   serializeAnnalePayload,
   serializeStudySheetPayload,
@@ -84,17 +85,18 @@ test('serializeUserSettingsPayload normalizes legacy local-priority model and tr
     {
       selectedModel: 'local-priority',
       selectedProvider: 'local',
-      claudeKey: 'k'.repeat(800),
-      openaiKey: '  sk-test  ',
-      groqKey: '',
+      groqKey: 'k'.repeat(800),
+      cerebrasKey: '  csk-test  ',
+      mistralKey: '  mis-test  ',
       openrouterKey: '',
     },
     'uid_1'
   );
   assert.equal(payload.selectedModel, 'gemini-4-hydrogen');
   assert.equal(payload.selectedProvider, 'gemini');
-  assert.equal(payload.claudeKey.length, BLUEPRINT_LIMITS.MAX_KEY_LEN);
-  assert.equal(payload.openaiKey, 'sk-test');
+  assert.equal(payload.groqKey.length, BLUEPRINT_LIMITS.MAX_KEY_LEN);
+  assert.equal(payload.cerebrasKey, 'csk-test');
+  assert.equal(payload.mistralKey, 'mis-test');
 });
 
 test('mergeLocalAndCloudById keeps cloud items authoritative and detects local-only items', () => {
@@ -111,3 +113,29 @@ test('mergeLocalAndCloudById keeps cloud items authoritative and detects local-o
   assert.equal(missingInCloud.length, 1);
   assert.equal(missingInCloud[0].id, 's2');
 });
+
+test('mergeRelaySettings preserves non-empty local keys if cloud values are empty', () => {
+  const { merged, shouldPushMergedToCloud } = mergeRelaySettings(
+    {
+      selectedModel: 'gemini-4-hydrogen',
+      selectedProvider: 'gemini',
+      groqKey: 'gsk-local-123',
+      cerebrasKey: '',
+      mistralKey: 'mis-local-456',
+      openrouterKey: '',
+    },
+    {
+      selectedModel: 'gemini-4-hydrogen',
+      selectedProvider: 'gemini',
+      groqKey: '',
+      cerebrasKey: 'csk-cloud-789',
+      mistralKey: '',
+      openrouterKey: '',
+    }
+  );
+  assert.equal(merged.groqKey, 'gsk-local-123');
+  assert.equal(merged.cerebrasKey, 'csk-cloud-789');
+  assert.equal(merged.mistralKey, 'mis-local-456');
+  assert.equal(shouldPushMergedToCloud, true);
+});
+

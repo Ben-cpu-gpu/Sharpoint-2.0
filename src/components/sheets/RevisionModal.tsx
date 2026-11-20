@@ -139,7 +139,7 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
       <div
         role="dialog"
         aria-modal="true"

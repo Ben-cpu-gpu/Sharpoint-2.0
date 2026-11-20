@@ -4,26 +4,49 @@ import {
   AIProvider,
   getServerGeminiConfigured,
   setServerGeminiConfigured,
-  getAnthropicApiKey, 
-  getOpenAIApiKey, 
-  getGroqApiKey, 
+  getGroqApiKey,
+  getCerebrasApiKey,
+  getMistralApiKey,
   getOpenRouterApiKey,
   getSelectedModel, 
   getSelectedProvider 
 } from './apiKeyService';
-import { CloudAIProvider, DEFAULT_MODEL_ID, resolveFallbackChain } from '../utils/aiFallbackOrder';
+import {
+  CloudAIProvider,
+  DEFAULT_MODEL_ID,
+  getCandidateModelsForProvider,
+  resolveFallbackChain,
+} from '../utils/aiFallbackOrder';
 import { DEFAULT_SUBJECT_ID } from '../utils/courseCatalog';
+import { extractJsonFromModelText } from '../utils/pdfTelemetry';
+
+export interface AIExtractionProgress {
+  provider: string;
+  model: string;
+  aiPct: number;
+  bytesReceived: number;
+  stepLabel: string;
+  streamedText?: string;
+}
 
 export const STRICT_EXHAUSTIVENESS_RULE = `CONSIGNE DE RIGUEUR ET D'EXHAUSTIVITÉ ABSOLUE : Tu as interdiction formelle de résumer, de tronquer, d'abréger ou d'omettre des notions. Tu dois extraire l'intégralité du contenu mathématique et physique présent dans le document fourni. Si le document comporte 15 formules, tu dois extraire les 15 formules. N'utilise jamais de 'etc.' ou de 'de même pour...'. Définis 100% des variables avec leurs unités SI.`;
 
 function cleanJsonOutput(text: string): string {
-  let cleaned = text.trim();
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
-  }
-  return cleaned.trim();
+  return extractJsonFromModelText(text);
+}
+
+function isWarmupHtmlPayload(rawText: string): boolean {
+  const trimmed = (rawText || '').trim().toLowerCase();
+  return (
+    trimmed.startsWith('<!doctype') ||
+    trimmed.startsWith('<html') ||
+    trimmed.includes('starting server') ||
+    trimmed.includes('__aistudio_warmup_failed')
+  );
+}
+
+async function waitMs(ms: number): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function resolveClientGeminiModel(modelOverride?: string): string {
@@ -56,56 +79,194 @@ export async function fetchGeminiServerStatus(): Promise<boolean> {
 }
 
 /**
- * 1. APPEL GEMINI CÔTÉ SERVEUR (/api/gemini/generate)
+ * 1. APPEL GEMINI CÔTÉ SERVEUR (/api/gemini/stream & /api/gemini/generate)
+ * Gère le réveil automatique du conteneur (HTTP 502/HTML warmup) et le streaming temps réel.
  */
-async function callGemini(systemPrompt: string, userPrompt: string, modelOverride?: string): Promise<string> {
+async function callGemini(
+  systemPrompt: string,
+  userPrompt: string,
+  modelOverride?: string,
+  onProgress?: (progress: AIExtractionProgress) => void,
+  allowCascade = true
+): Promise<{ text: string; activeModel: string }> {
   const modelName = resolveClientGeminiModel(modelOverride);
+  const fullSystemPrompt = `${STRICT_EXHAUSTIVENESS_RULE}\n\n${systemPrompt}`;
+  const maxAttempts = 3;
 
-  const response = await fetch('/api/gemini/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemPrompt: `${STRICT_EXHAUSTIVENESS_RULE}\n\n${systemPrompt}`,
-      userPrompt,
-      model: modelName,
-      responseMimeType: 'application/json',
-    }),
-  });
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // 1) En mode streaming interactif, essaie /api/gemini/stream pour fournir une progression réelle en direct
+    if (onProgress) {
+      try {
+        const streamRes = await fetch('/api/gemini/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemPrompt: fullSystemPrompt,
+            userPrompt,
+            model: modelName,
+            responseMimeType: 'application/json',
+            cascadeModels: allowCascade,
+          }),
+        });
 
-  const rawText = await response.text();
-  let parsedBody: any = null;
-  try {
-    parsedBody = JSON.parse(rawText);
-  } catch {
-    parsedBody = null;
-  }
+        const contentType = streamRes.headers.get('content-type') || '';
+        if (streamRes.ok && streamRes.body && contentType.includes('text/event-stream')) {
+          const reader = streamRes.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let fullText = '';
+          let activeModel = modelName;
+          let streamErr: { statusCode: number; message: string; rawPayload?: string } | null = null;
 
-  if (!response.ok) {
-    if (response.status === 503 && parsedBody?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
-      setServerGeminiConfigured(false);
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split('\n\n');
+            buffer = events.pop() || '';
+            for (const evt of events) {
+              const line = evt.split('\n').find(l => l.startsWith('data: '));
+              if (!line) continue;
+              const payload = JSON.parse(line.slice(6));
+              if (payload.model) activeModel = payload.model;
+              if (payload.error) {
+                streamErr = {
+                  statusCode: payload.statusCode || 502,
+                  message: payload.error,
+                  rawPayload: payload.rawPayload,
+                };
+                break;
+              }
+              if (payload.text) {
+                fullText += payload.text;
+                const estPct = Math.min(94, Math.max(18, 18 + Math.round(fullText.length / 45)));
+                onProgress({
+                  provider: 'Gemini (Serveur)',
+                  model: activeModel,
+                  aiPct: estPct,
+                  bytesReceived: fullText.length,
+                  stepLabel: `Génération en direct via ${activeModel} (${fullText.length} caractères reçus)...`,
+                  streamedText: fullText,
+                });
+              }
+            }
+            if (streamErr) break;
+          }
+
+          if (!streamErr && fullText.trim()) {
+            setServerGeminiConfigured(true);
+            return { text: cleanJsonOutput(fullText), activeModel };
+          }
+          if (streamErr?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
+            setServerGeminiConfigured(false);
+            throw {
+              provider: 'Gemini',
+              model: activeModel,
+              statusCode: 503,
+              message: streamErr.message,
+              rawPayload: streamErr.rawPayload,
+            };
+          }
+        } else if (!streamRes.ok) {
+          const maybeHtml = await streamRes.text();
+          if ((streamRes.status === 502 || streamRes.status === 503 || isWarmupHtmlPayload(maybeHtml)) && attempt < maxAttempts - 1) {
+            onProgress({
+              provider: 'Gemini (Serveur)',
+              model: modelName,
+              aiPct: 12,
+              bytesReceived: 0,
+              stepLabel: `Démarrage du serveur Gemini (tentative ${attempt + 2}/${maxAttempts})...`,
+            });
+            await waitMs(1500 * (attempt + 1));
+            continue;
+          }
+        }
+      } catch (err: any) {
+        if (err?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
+          throw err;
+        }
+        // Poursuit vers l'appel /api/gemini/generate non-stream en secours
+      }
     }
-    throw {
-      provider: 'Gemini',
-      model: modelName,
-      statusCode: parsedBody?.statusCode || response.status,
-      message: parsedBody?.error || `Erreur serveur Gemini HTTP ${response.status}`,
-      rawPayload: parsedBody?.rawPayload || rawText,
-    };
+
+    // 2) Appel standard POST /api/gemini/generate
+    const response = await fetch('/api/gemini/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemPrompt: fullSystemPrompt,
+        userPrompt,
+        model: modelName,
+        responseMimeType: 'application/json',
+        cascadeModels: allowCascade,
+      }),
+    });
+
+    const rawText = await response.text();
+    let parsedBody: any = null;
+    try {
+      parsedBody = JSON.parse(rawText);
+    } catch {
+      parsedBody = null;
+    }
+
+    const warmupDetected = isWarmupHtmlPayload(rawText) || response.status === 502 || response.status === 503;
+    if (
+      warmupDetected &&
+      parsedBody?.rawPayload !== 'MISSING_SERVER_GEMINI_API_KEY' &&
+      attempt < maxAttempts - 1
+    ) {
+      onProgress?.({
+        provider: 'Gemini (Serveur)',
+        model: modelName,
+        aiPct: 12 + attempt * 5,
+        bytesReceived: 0,
+        stepLabel: `Réveil du serveur Gemini en cours (tentative ${attempt + 2}/${maxAttempts})...`,
+      });
+      await waitMs(1500 * (attempt + 1));
+      continue;
+    }
+
+    if (!response.ok) {
+      if (response.status === 503 && parsedBody?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
+        setServerGeminiConfigured(false);
+      }
+      throw {
+        provider: 'Gemini',
+        model: parsedBody?.model || modelName,
+        statusCode: parsedBody?.statusCode || response.status,
+        message: isWarmupHtmlPayload(rawText)
+          ? 'Serveur en cours de démarrage (HTTP 502) — bascule vers les IA de secours.'
+          : parsedBody?.error || `Erreur serveur Gemini HTTP ${response.status}`,
+        rawPayload: parsedBody?.rawPayload || rawText.substring(0, 600),
+      };
+    }
+
+    const candidate = parsedBody?.text;
+    const resolvedModel = parsedBody?.model || modelName;
+    if (!candidate) {
+      throw {
+        provider: 'Gemini',
+        model: resolvedModel,
+        statusCode: 502,
+        message: isWarmupHtmlPayload(rawText)
+          ? 'Le serveur redémarrait (page HTML reçue) — bascule vers les IA de secours.'
+          : 'Réponse Gemini vide ou filtrée.',
+        rawPayload: rawText.substring(0, 600),
+      };
+    }
+
+    setServerGeminiConfigured(true);
+    return { text: cleanJsonOutput(candidate), activeModel: resolvedModel };
   }
 
-  const candidate = parsedBody?.text;
-  if (!candidate) {
-    throw {
-      provider: 'Gemini',
-      model: modelName,
-      statusCode: 502,
-      message: 'Réponse Gemini vide ou filtrée.',
-      rawPayload: rawText,
-    };
-  }
-
-  setServerGeminiConfigured(true);
-  return cleanJsonOutput(candidate);
+  throw {
+    provider: 'Gemini',
+    model: modelName,
+    statusCode: 502,
+    message: 'Serveur Gemini temporairement indisponible après plusieurs tentatives.',
+    rawPayload: 'WARMUP_EXHAUSTED',
+  };
 }
 
 export async function streamGeminiContent(
@@ -159,153 +320,7 @@ export async function streamGeminiContent(
 }
 
 /**
- * 2. APPEL ANTHROPIC CLAUDE (Claude Sonnet 4 / 3.5 Haiku)
- */
-async function callClaude(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
-  const apiKey = keyOverride ?? getAnthropicApiKey();
-  const rawModel = modelOverride || getSelectedModel();
-
-  if (!apiKey) {
-    throw {
-      provider: 'Claude',
-      model: rawModel,
-      statusCode: 401,
-      message: 'Aucune clé Anthropic Claude configurée dans les paramètres.',
-      rawPayload: 'MISSING_CLAUDE_KEY'
-    };
-  }
-
-  const modelIdentifier = rawModel.includes('haiku') 
-    ? 'claude-3-5-haiku-latest' 
-    : 'claude-sonnet-4-20250514';
-
-  const url = 'https://api.anthropic.com/v1/messages';
-
-  const payload = {
-    model: modelIdentifier,
-    max_tokens: 4096,
-    system: `${STRICT_EXHAUSTIVENESS_RULE}\n\nRéponds UNIQUEMENT sous la forme d'un objet JSON strict et valide.\n${systemPrompt}`,
-    messages: [
-      {
-        role: 'user',
-        content: userPrompt
-      }
-    ]
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const rawText = await response.text();
-
-  if (!response.ok) {
-    throw {
-      provider: 'Claude',
-      model: rawModel,
-      statusCode: response.status,
-      message: `Erreur HTTP Claude ${response.status}: ${rawText.substring(0, 300)}`,
-      rawPayload: rawText
-    };
-  }
-
-  const data = JSON.parse(rawText);
-  const textContent = data.content?.[0]?.text;
-  if (!textContent) {
-    throw {
-      provider: 'Claude',
-      model: rawModel,
-      statusCode: 200,
-      message: 'Réponse Claude vide.',
-      rawPayload: rawText
-    };
-  }
-
-  return cleanJsonOutput(textContent);
-}
-
-/**
- * 3. APPEL OPENAI CHATGPT (GPT-4o / GPT-4o mini)
- */
-async function callOpenAI(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
-  const apiKey = keyOverride ?? getOpenAIApiKey();
-  const rawModel = modelOverride || getSelectedModel();
-
-  if (!apiKey) {
-    throw {
-      provider: 'OpenAI',
-      model: rawModel,
-      statusCode: 401,
-      message: 'Aucune clé OpenAI ChatGPT configurée dans les paramètres.',
-      rawPayload: 'MISSING_OPENAI_KEY'
-    };
-  }
-
-  const modelIdentifier = rawModel.includes('mini') ? 'gpt-4o-mini' : 'gpt-4o';
-
-  const url = 'https://api.openai.com/v1/chat/completions';
-
-  const payload = {
-    model: modelIdentifier,
-    messages: [
-      {
-        role: 'system',
-        content: `${STRICT_EXHAUSTIVENESS_RULE}\n\nTu dois répondre strictement en JSON valide.\n${systemPrompt}`
-      },
-      {
-        role: 'user',
-        content: userPrompt
-      }
-    ],
-    response_format: { type: 'json_object' },
-    temperature: 0.1
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const rawText = await response.text();
-
-  if (!response.ok) {
-    throw {
-      provider: 'OpenAI',
-      model: rawModel,
-      statusCode: response.status,
-      message: `Erreur HTTP OpenAI ${response.status}: ${rawText.substring(0, 300)}`,
-      rawPayload: rawText
-    };
-  }
-
-  const data = JSON.parse(rawText);
-  const textContent = data.choices?.[0]?.message?.content;
-  if (!textContent) {
-    throw {
-      provider: 'OpenAI',
-      model: rawModel,
-      statusCode: 200,
-      message: 'Réponse OpenAI vide.',
-      rawPayload: rawText
-    };
-  }
-
-  return cleanJsonOutput(textContent);
-}
-
-/**
- * 4. APPEL GROQ (Source Sûre · Tier Gratuit Llama 3.3 / Qwen 3)
+ * 2. APPEL GROQ CLOUD (awesome-free-llm-apis · Tier Gratuit Llama 3.3 / Qwen 3)
  */
 async function callGroq(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
   const apiKey = keyOverride ?? getGroqApiKey();
@@ -363,7 +378,143 @@ async function callGroq(systemPrompt: string, userPrompt: string, modelOverride?
 }
 
 /**
- * 5. APPEL OPENROUTER (:free officiel — Llama 3.3 / DeepSeek R1 / Gemma 3)
+ * 3. APPEL CEREBRAS CLOUD (awesome-free-llm-apis · 1M tokens/jour gratuits sans CB)
+ */
+async function callCerebras(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
+  const apiKey = keyOverride ?? getCerebrasApiKey();
+  const CEREBRAS_MODEL =
+    modelOverride === 'qwen-3-32b' || modelOverride === 'llama3.1-8b' || modelOverride === 'llama-3.3-70b'
+      ? modelOverride
+      : 'llama-3.3-70b';
+
+  if (!apiKey) {
+    throw {
+      provider: 'Cerebras',
+      model: CEREBRAS_MODEL,
+      statusCode: 401,
+      message: 'Aucune clé Cerebras configurée.',
+      rawPayload: 'MISSING_CEREBRAS_KEY'
+    };
+  }
+
+  const url = 'https://api.cerebras.ai/v1/chat/completions';
+  const enforcedSystemPrompt = `${STRICT_EXHAUSTIVENESS_RULE}\n\nRéponds UNIQUEMENT sous la forme d'un objet JSON strict et valide.\n${systemPrompt}`;
+
+  const payload = {
+    model: CEREBRAS_MODEL,
+    messages: [
+      { role: 'system', content: enforcedSystemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.1,
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const rawText = await response.text();
+
+  if (!response.ok) {
+    throw {
+      provider: 'Cerebras',
+      model: CEREBRAS_MODEL,
+      statusCode: response.status,
+      message: `Erreur HTTP Cerebras ${response.status}: ${rawText.substring(0, 300)}`,
+      rawPayload: rawText
+    };
+  }
+
+  const data = JSON.parse(rawText);
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw {
+      provider: 'Cerebras',
+      model: CEREBRAS_MODEL,
+      statusCode: 200,
+      message: 'Réponse Cerebras vide.',
+      rawPayload: rawText
+    };
+  }
+  return cleanJsonOutput(content);
+}
+
+/**
+ * 4. APPEL MISTRAL AI (awesome-free-llm-apis · La Plateforme Experiment gratuit)
+ */
+async function callMistral(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
+  const apiKey = keyOverride ?? getMistralApiKey();
+  const MISTRAL_MODEL =
+    modelOverride === 'open-mistral-nemo' || modelOverride === 'mistral-small-latest'
+      ? modelOverride
+      : 'mistral-small-latest';
+
+  if (!apiKey) {
+    throw {
+      provider: 'Mistral',
+      model: MISTRAL_MODEL,
+      statusCode: 401,
+      message: 'Aucune clé Mistral AI configurée.',
+      rawPayload: 'MISSING_MISTRAL_KEY'
+    };
+  }
+
+  const url = 'https://api.mistral.ai/v1/chat/completions';
+  const enforcedSystemPrompt = `${STRICT_EXHAUSTIVENESS_RULE}\n\nRéponds UNIQUEMENT sous la forme d'un objet JSON strict et valide.\n${systemPrompt}`;
+
+  const payload = {
+    model: MISTRAL_MODEL,
+    messages: [
+      { role: 'system', content: enforcedSystemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.1,
+  };
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const rawText = await response.text();
+
+  if (!response.ok) {
+    throw {
+      provider: 'Mistral',
+      model: MISTRAL_MODEL,
+      statusCode: response.status,
+      message: `Erreur HTTP Mistral ${response.status}: ${rawText.substring(0, 300)}`,
+      rawPayload: rawText
+    };
+  }
+
+  const data = JSON.parse(rawText);
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw {
+      provider: 'Mistral',
+      model: MISTRAL_MODEL,
+      statusCode: 200,
+      message: 'Réponse Mistral vide.',
+      rawPayload: rawText
+    };
+  }
+  return cleanJsonOutput(content);
+}
+
+/**
+ * 5. APPEL OPENROUTER (:free officiel — awesome-free-llm-apis · Llama 3.3 / DeepSeek R1 / Gemma 3)
  */
 async function callOpenRouter(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
   const apiKey = keyOverride ?? getOpenRouterApiKey();
@@ -423,17 +574,17 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, modelOve
 
 const DEFAULT_PROVIDER_MODELS: Record<CloudAIProvider, string> = {
   gemini: DEFAULT_MODEL_ID,
-  claude: 'claude-sonnet-4-20250514',
-  openai: 'gpt-4o',
   groq: 'llama-3.3-70b-versatile',
+  cerebras: 'llama-3.3-70b',
+  mistral: 'mistral-small-latest',
   openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
 };
 
 const PROVIDER_LOG_LABELS: Record<CloudAIProvider, DebugLog['apiProvider']> = {
   gemini: 'Gemini',
-  claude: 'Claude',
-  openai: 'OpenAI',
   groq: 'Groq',
+  cerebras: 'Cerebras',
+  mistral: 'Mistral',
   openrouter: 'OpenRouter',
 };
 
@@ -458,7 +609,7 @@ export async function testProviderHealth(
       latencyMs: 1,
       statusCode: 200,
       testedModel: 'Regex Client-Side',
-      message: 'Extraction locale hors-ligne opérationnelle (4e · dernier recours).',
+      message: 'Extraction locale hors-ligne opérationnelle (dernier recours).',
       checkedAt,
     };
   }
@@ -542,12 +693,12 @@ export async function testProviderHealth(
   const key =
     overrideKey !== undefined
       ? overrideKey.trim()
-      : provider === 'claude'
-      ? getAnthropicApiKey()
-      : provider === 'openai'
-      ? getOpenAIApiKey()
       : provider === 'groq'
       ? getGroqApiKey()
+      : provider === 'cerebras'
+      ? getCerebrasApiKey()
+      : provider === 'mistral'
+      ? getMistralApiKey()
       : getOpenRouterApiKey();
 
   if (!key) {
@@ -565,12 +716,12 @@ export async function testProviderHealth(
   const usrProbe = 'Test de connectivité API.';
 
   try {
-    if (provider === 'claude') {
-      await callClaude(sysProbe, usrProbe, testedModel, key);
-    } else if (provider === 'openai') {
-      await callOpenAI(sysProbe, usrProbe, testedModel, key);
-    } else if (provider === 'groq') {
+    if (provider === 'groq') {
       await callGroq(sysProbe, usrProbe, testedModel, key);
+    } else if (provider === 'cerebras') {
+      await callCerebras(sysProbe, usrProbe, testedModel, key);
+    } else if (provider === 'mistral') {
+      await callMistral(sysProbe, usrProbe, testedModel, key);
     } else {
       await callOpenRouter(sysProbe, usrProbe, testedModel, key);
     }
@@ -630,33 +781,48 @@ export async function testProviderHealth(
 }
 
 /**
- * ROUTEUR MULTI-MODÈLES UNIFIÉ :
- * 1. Gemini (Serveur) -> 2. Claude -> 3. ChatGPT -> (Groq / OpenRouter gratuits) -> 4. Mode Local (dernier recours)
+ * ROUTEUR MULTI-MODÈLES EXHAUSTIF :
+ * 1. Gemini (tous modèles valides + réveil auto)
+ * 2. Toutes les API gratuites configurées (Groq -> Cerebras -> Mistral -> OpenRouter :free) et tous leurs modèles disponibles
+ * 3. Mode Local uniquement en dernier recours après consentement explicite
  */
 async function executeWithFallback<T>(
   systemPrompt: string,
   userPrompt: string,
   validator: (parsed: any) => T,
   forceLocal?: boolean,
-  localFallbackFn?: () => T
+  localFallbackFn?: () => T,
+  onProgress?: (progress: AIExtractionProgress) => void
 ): Promise<T> {
   const selectedProvider = getSelectedProvider();
   const selectedModel = getSelectedModel();
+
+  let geminiAvailable = getServerGeminiConfigured();
+  if (!geminiAvailable && !forceLocal) {
+    geminiAvailable = await fetchGeminiServerStatus();
+  }
 
   const resolution = resolveFallbackChain({
     selectedProvider,
     selectedModel,
     forceLocal,
     configuredKeys: {
-      gemini: getServerGeminiConfigured(),
-      claude: getAnthropicApiKey().length > 0,
-      openai: getOpenAIApiKey().length > 0,
+      gemini: geminiAvailable,
       groq: getGroqApiKey().length > 0,
+      cerebras: getCerebrasApiKey().length > 0,
+      mistral: getMistralApiKey().length > 0,
       openrouter: getOpenRouterApiKey().length > 0,
     },
   });
 
   if (resolution.shouldUseLocalImmediately && localFallbackFn) {
+    onProgress?.({
+      provider: 'Mode Local',
+      model: 'Regex Client-Side',
+      aiPct: 100,
+      bytesReceived: userPrompt.length,
+      stepLabel: 'Extraction locale terminée dans le navigateur.',
+    });
     addDebugLog({
       apiProvider: 'Local',
       model: 'Moteur Regex Client-Side (Dernier recours Offline)',
@@ -667,52 +833,109 @@ async function executeWithFallback<T>(
     return localFallbackFn();
   }
 
-  for (const currentProvider of resolution.configuredCloudChain) {
-    const modelToUse =
-      currentProvider === selectedProvider
-        ? selectedModel
-        : DEFAULT_PROVIDER_MODELS[currentProvider];
+  const attemptErrors: string[] = [];
+  const totalProviders = Math.max(1, resolution.configuredCloudChain.length);
 
-    try {
-      let rawResult = '';
-      if (currentProvider === 'gemini') {
-        rawResult = await callGemini(systemPrompt, userPrompt, modelToUse);
-      } else if (currentProvider === 'claude') {
-        rawResult = await callClaude(systemPrompt, userPrompt, modelToUse);
-      } else if (currentProvider === 'openai') {
-        rawResult = await callOpenAI(systemPrompt, userPrompt, modelToUse);
-      } else if (currentProvider === 'groq') {
-        rawResult = await callGroq(systemPrompt, userPrompt, modelToUse);
-      } else {
-        rawResult = await callOpenRouter(systemPrompt, userPrompt, modelToUse);
+  for (let pIdx = 0; pIdx < resolution.configuredCloudChain.length; pIdx++) {
+    const currentProvider = resolution.configuredCloudChain[pIdx];
+    const providerLabel = PROVIDER_LOG_LABELS[currentProvider];
+
+    // Pour Gemini, /api/gemini/generate et /api/gemini/stream cascadent déjà tous les modèles valides côté serveur ;
+    // pour les autres API (Groq, Cerebras, Mistral, OpenRouter), on parcourt chaque modèle candidat si l'un est indisponible/404/quota.
+    const candidateModels =
+      currentProvider === 'gemini'
+        ? [currentProvider === selectedProvider ? selectedModel : DEFAULT_PROVIDER_MODELS.gemini]
+        : getCandidateModelsForProvider(
+            currentProvider,
+            currentProvider === selectedProvider ? selectedModel : undefined
+          );
+
+    for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
+      const modelToUse = candidateModels[mIdx];
+      const basePct = Math.min(82, 10 + Math.round(((pIdx * 2 + mIdx) / Math.max(2, totalProviders * 2)) * 55));
+
+      onProgress?.({
+        provider: providerLabel,
+        model: modelToUse,
+        aiPct: basePct,
+        bytesReceived: 0,
+        stepLabel: `Analyse via ${providerLabel} (${modelToUse})...`,
+      });
+
+      try {
+        let rawResult = '';
+        let resolvedModelName = modelToUse;
+
+        if (currentProvider === 'gemini') {
+          const geminiOut = await callGemini(systemPrompt, userPrompt, modelToUse, onProgress, true);
+          rawResult = geminiOut.text;
+          resolvedModelName = geminiOut.activeModel;
+        } else if (currentProvider === 'groq') {
+          rawResult = await callGroq(systemPrompt, userPrompt, modelToUse);
+        } else if (currentProvider === 'cerebras') {
+          rawResult = await callCerebras(systemPrompt, userPrompt, modelToUse);
+        } else if (currentProvider === 'mistral') {
+          rawResult = await callMistral(systemPrompt, userPrompt, modelToUse);
+        } else {
+          rawResult = await callOpenRouter(systemPrompt, userPrompt, modelToUse);
+        }
+
+        const parsed = JSON.parse(cleanJsonOutput(rawResult));
+        const validated = validator(parsed);
+
+        onProgress?.({
+          provider: providerLabel,
+          model: resolvedModelName,
+          aiPct: 100,
+          bytesReceived: rawResult.length,
+          stepLabel: `Structuration réussie avec ${providerLabel} (${resolvedModelName}).`,
+          streamedText: rawResult,
+        });
+
+        addDebugLog({
+          apiProvider: providerLabel,
+          model: resolvedModelName,
+          status: 'success',
+          statusCode: 200,
+          message: `Génération réussie via ${providerLabel} (${resolvedModelName}).`,
+          rawPayload: rawResult.substring(0, 500),
+        });
+
+        return validated;
+      } catch (providerError: any) {
+        const failedModel = providerError?.model || modelToUse;
+        const statusCode = providerError?.statusCode || 0;
+        const msg = providerError?.message || `Échec sur ${failedModel}`;
+        attemptErrors.push(`${providerLabel} (${failedModel}) : ${msg}`);
+
+        addDebugLog({
+          apiProvider: (providerError?.provider || providerLabel) as DebugLog['apiProvider'],
+          model: failedModel,
+          status: 'error',
+          statusCode,
+          message: `${msg} — bascule automatique vers le modèle/fournisseur suivant...`,
+          rawPayload: providerError?.rawPayload || JSON.stringify(providerError),
+        });
+
+        // Si clé API invalide/refusée (401/403), inutile d'essayer les autres modèles du même fournisseur
+        if (statusCode === 401 || statusCode === 403 || providerError?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
+          break;
+        }
       }
-
-      const parsed = JSON.parse(rawResult);
-      const validated = validator(parsed);
-
-      addDebugLog({
-        apiProvider: PROVIDER_LOG_LABELS[currentProvider],
-        model: modelToUse,
-        status: 'success',
-        statusCode: 200,
-        message: `Génération réussie via ${PROVIDER_LOG_LABELS[currentProvider]} (${modelToUse}).`,
-        rawPayload: rawResult.substring(0, 500),
-      });
-
-      return validated;
-    } catch (providerError: any) {
-      addDebugLog({
-        apiProvider: (providerError?.provider || PROVIDER_LOG_LABELS[currentProvider]) as DebugLog['apiProvider'],
-        model: modelToUse,
-        status: 'error',
-        statusCode: providerError?.statusCode || 0,
-        message: providerError?.message || `Échec sur ${modelToUse}, tentative du fournisseur suivant...`,
-        rawPayload: providerError?.rawPayload || JSON.stringify(providerError),
-      });
     }
   }
 
-  throw new Error('REQUIRE_USER_CONSENT');
+  if (localFallbackFn) {
+    const err = new Error('REQUIRE_USER_CONSENT') as Error & { details?: string[] };
+    err.details = attemptErrors;
+    throw err;
+  }
+
+  throw new Error(
+    attemptErrors.length > 0
+      ? `Toutes les IA disponibles ont échoué : ${attemptErrors.slice(0, 3).join(' | ')}`
+      : 'Aucun service IA disponible. Vérifiez Gemini ou ajoutez une clé gratuite (Groq, Cerebras, Mistral, OpenRouter).'
+  );
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -873,7 +1096,8 @@ function localParseTd(text: string, type: 'td' | 'annale', subjectId = DEFAULT_S
 export async function transformLectureToToolbox(
   text: string,
   forceLocal?: boolean,
-  subjectId = DEFAULT_SUBJECT_ID
+  subjectId = DEFAULT_SUBJECT_ID,
+  onProgress?: (progress: AIExtractionProgress) => void
 ): Promise<StudySheet> {
   const systemPrompt = `Tu es un professeur émérite d'école d'ingénieurs aéronautique et automobile (type ESTACA).
 Transforme le cours fourni en une boîte à outils de révision ultra-exhaustive au format JSON.
@@ -971,7 +1195,8 @@ Structure JSON attendue :
       updatedAt: new Date().toISOString(),
     }),
     forceLocal,
-    () => localExtractToolbox(text, subjectId)
+    () => localExtractToolbox(text, subjectId),
+    onProgress
   );
 }
 
@@ -979,7 +1204,8 @@ export async function parseTdDocument(
   text: string,
   type: 'td' | 'annale',
   forceLocal?: boolean,
-  subjectId = DEFAULT_SUBJECT_ID
+  subjectId = DEFAULT_SUBJECT_ID,
+  onProgress?: (progress: AIExtractionProgress) => void
 ): Promise<Array<TDExercise | AnnaleItem>> {
   const isAnnale = type === 'annale';
 
@@ -1050,7 +1276,8 @@ Format JSON attendu :
       });
     },
     forceLocal,
-    () => localParseTd(text, type, subjectId)
+    () => localParseTd(text, type, subjectId),
+    onProgress
   );
 }
 

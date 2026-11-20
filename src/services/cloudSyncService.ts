@@ -2,6 +2,7 @@ import { User } from 'firebase/auth';
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   onSnapshot,
@@ -15,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { AnnaleItem, StudySheet, TDExercise } from '../types/course';
+import { normalizeStoredModelId, normalizeStoredProvider } from '../utils/aiFallbackOrder';
 import {
   BLUEPRINT_LIMITS,
   sanitizeFirestoreId,
@@ -191,13 +193,15 @@ export function subscribeToUserCloudData(
         return;
       }
       const data = snapshot.data();
+      const normalizedModel = normalizeStoredModelId(data.selectedModel);
+      const normalizedProvider = normalizeStoredProvider(data.selectedProvider, data.selectedModel);
       callbacks.onSettings(
         {
-          selectedModel: data.selectedModel || 'gemini-4-hydrogen',
-          selectedProvider: data.selectedProvider || 'gemini',
-          claudeKey: data.claudeKey || '',
-          openaiKey: data.openaiKey || '',
+          selectedModel: normalizedModel,
+          selectedProvider: normalizedProvider,
           groqKey: data.groqKey || '',
+          cerebrasKey: data.cerebrasKey || '',
+          mistralKey: data.mistralKey || '',
           openrouterKey: data.openrouterKey || '',
         },
         true
@@ -371,13 +375,20 @@ export async function saveUserSettingsInCloud(
         updatedAt: serverTimestamp(),
       });
     } else {
+      const existingData = existingSnap.data() || {};
+      const migrationDeletes =
+        'claudeKey' in existingData || 'openaiKey' in existingData
+          ? { claudeKey: deleteField(), openaiKey: deleteField() }
+          : {};
+
       await updateDoc(ref, {
         selectedModel: payload.selectedModel,
         selectedProvider: payload.selectedProvider,
-        claudeKey: payload.claudeKey,
-        openaiKey: payload.openaiKey,
         groqKey: payload.groqKey,
+        cerebrasKey: payload.cerebrasKey,
+        mistralKey: payload.mistralKey,
         openrouterKey: payload.openrouterKey,
+        ...migrationDeletes,
         updatedAt: serverTimestamp(),
       });
     }

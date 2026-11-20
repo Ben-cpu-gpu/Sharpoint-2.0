@@ -1,22 +1,23 @@
-export type CloudAIProvider = 'gemini' | 'claude' | 'openai' | 'groq' | 'openrouter';
+export type CloudAIProvider = 'gemini' | 'groq' | 'cerebras' | 'mistral' | 'openrouter';
 export type AnyAIProvider = CloudAIProvider | 'local';
 
 /**
- * Ordre canonique de priorité des fournisseurs d'IA :
- * 1. Gemini (local navigateur / clé Google AI Studio gratuite)
- * 2. Claude (Anthropic)
- * 3. ChatGPT (OpenAI)
- * (+ Groq & OpenRouter :free en relais gratuits si configurés)
- * 4. Mode Local (strictement en dernier recours)
+ * Ordre canonique de priorité des fournisseurs d'IA (Gemini prioritaire + API gratuites awesome-free-llm-apis) :
+ * 1. Gemini (Serveur officiel @google/genai)
+ * 2. Groq Cloud (Tier gratuit sans carte bancaire)
+ * 3. Cerebras Cloud (1M tokens/jour gratuits)
+ * 4. Mistral AI (Tier gratuit Experiment)
+ * 5. OpenRouter (:free officiel 0€)
+ * 6. Mode Local (strictement en dernier recours)
  */
 export const PRIMARY_CLOUD_ORDER: readonly CloudAIProvider[] = [
   'gemini',
-  'claude',
-  'openai',
 ];
 
 export const FREE_RELAY_CLOUD_ORDER: readonly CloudAIProvider[] = [
   'groq',
+  'cerebras',
+  'mistral',
   'openrouter',
 ];
 
@@ -33,20 +34,26 @@ const LEGACY_MODEL_ALIASES: Record<string, string> = {
   'gemini-1.5-flash': 'gemini-4-hydrogen',
   'gemini-1.5-pro': 'gemini-2.5-pro',
   'gemini-pro': 'gemini-4-hydrogen',
-  'claude-sonnet-5.5': 'claude-sonnet-4-20250514',
-  'claude-haiku-5.5': 'claude-3-5-haiku-latest',
-  'gpt-5': 'gpt-4o',
+  'claude-sonnet-5.5': DEFAULT_MODEL_ID,
+  'claude-sonnet-4-20250514': DEFAULT_MODEL_ID,
+  'claude-haiku-5.5': DEFAULT_MODEL_ID,
+  'claude-3-5-haiku-latest': DEFAULT_MODEL_ID,
+  'gpt-5': DEFAULT_MODEL_ID,
+  'gpt-4o': DEFAULT_MODEL_ID,
+  'gpt-4o-mini': DEFAULT_MODEL_ID,
 };
 
 export interface FallbackResolutionOptions {
   selectedProvider: AnyAIProvider;
   selectedModel: string;
   forceLocal?: boolean;
+  /** Garantit que Gemini reste prioritaire en tête (ex: fiches, exos TD, annales). */
+  preferGeminiFirst?: boolean;
   configuredKeys: {
     gemini: boolean;
-    claude: boolean;
-    openai: boolean;
     groq?: boolean;
+    cerebras?: boolean;
+    mistral?: boolean;
     openrouter?: boolean;
   };
 }
@@ -61,7 +68,7 @@ export interface FallbackResolution {
 }
 
 /**
- * Normalise l'ID de modèle stocké (migre l'ancien 'local-priority' et les anciens alias).
+ * Normalise l'ID de modèle stocké (migre 'local-priority', Claude/ChatGPT retirés et anciens alias Gemini).
  */
 export function normalizeStoredModelId(storedModel: string | null | undefined): string {
   if (!storedModel) {
@@ -71,20 +78,25 @@ export function normalizeStoredModelId(storedModel: string | null | undefined): 
 }
 
 /**
- * Normalise le fournisseur stocké (si l'ancien 'local-priority' était actif, rétablit Gemini en priorité 1).
+ * Normalise le fournisseur stocké (migre Claude/OpenAI/'local-priority' vers Gemini en priorité 1).
  */
 export function normalizeStoredProvider(
   storedProvider: string | null | undefined,
   rawStoredModel: string | null | undefined
 ): AnyAIProvider {
-  if (rawStoredModel === LEGACY_LOCAL_MODEL_ID) {
+  if (
+    rawStoredModel === LEGACY_LOCAL_MODEL_ID ||
+    storedProvider === 'claude' ||
+    storedProvider === 'openai' ||
+    (rawStoredModel && (rawStoredModel.startsWith('claude-') || rawStoredModel.startsWith('gpt-')))
+  ) {
     return 'gemini';
   }
   if (
     storedProvider === 'gemini' ||
-    storedProvider === 'claude' ||
-    storedProvider === 'openai' ||
     storedProvider === 'groq' ||
+    storedProvider === 'cerebras' ||
+    storedProvider === 'mistral' ||
     storedProvider === 'openrouter' ||
     storedProvider === 'local'
   ) {
@@ -93,14 +105,62 @@ export function normalizeStoredProvider(
   return 'gemini';
 }
 
+export const PROVIDER_MODEL_CHAINS: Record<CloudAIProvider, readonly string[]> = {
+  gemini: [
+    'gemini-4-hydrogen',
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+  ],
+  groq: [
+    'llama-3.3-70b-versatile',
+    'qwen/qwen3-32b',
+    'llama-3.1-8b-instant',
+  ],
+  cerebras: [
+    'llama-3.3-70b',
+    'qwen-3-32b',
+    'llama3.1-8b',
+  ],
+  mistral: [
+    'mistral-small-latest',
+    'open-mistral-nemo',
+  ],
+  openrouter: [
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-r1-0528:free',
+    'google/gemma-3-27b-it:free',
+  ],
+};
+
+/**
+ * Retourne la liste ordonnée des modèles valides à tenter pour un fournisseur donné.
+ * Place le modèle préféré en tête (s'il appartient bien à ce fournisseur), suivi des modèles de secours.
+ */
+export function getCandidateModelsForProvider(
+  provider: CloudAIProvider,
+  preferredModel?: string
+): string[] {
+  const defaults = PROVIDER_MODEL_CHAINS[provider] || [];
+  if (preferredModel && defaults.includes(preferredModel)) {
+    return [preferredModel, ...defaults.filter(m => m !== preferredModel)];
+  }
+  return [...defaults];
+}
+
 /**
  * Résout la chaîne de priorité et de repli :
- * 1. Gemini -> 2. Claude -> 3. ChatGPT (ou le fournisseur cloud explicitement sélectionné en tête)
- * + Relais gratuits optionnels (Groq, OpenRouter :free) si configurés
- * 4. Mode Local uniquement en dernier recours (ou si forceLocal === true)
+ * 1. Gemini (Serveur) en priorité -> API gratuites awesome-free-llm-apis configurées (Groq, Cerebras, Mistral, OpenRouter :free)
+ * -> Mode Local uniquement en dernier recours (ou si forceLocal === true)
  */
 export function resolveFallbackChain(options: FallbackResolutionOptions): FallbackResolution {
-  const { selectedProvider, selectedModel, forceLocal = false, configuredKeys } = options;
+  const {
+    selectedProvider,
+    selectedModel,
+    forceLocal = false,
+    preferGeminiFirst = false,
+    configuredKeys,
+  } = options;
 
   const isExplicitLocalFallback =
     selectedProvider === 'local' || selectedModel === LOCAL_FALLBACK_MODEL_ID;
@@ -114,30 +174,25 @@ export function resolveFallbackChain(options: FallbackResolutionOptions): Fallba
   }
 
   const baseCloudChain: CloudAIProvider[] = [...PRIMARY_CLOUD_ORDER];
-  if (configuredKeys.groq) {
-    baseCloudChain.push('groq');
-  }
-  if (configuredKeys.openrouter) {
-    baseCloudChain.push('openrouter');
+  for (const freeProvider of FREE_RELAY_CLOUD_ORDER) {
+    if (configuredKeys[freeProvider]) {
+      baseCloudChain.push(freeProvider);
+    }
   }
 
   let cloudOrder: CloudAIProvider[];
-  if (selectedProvider !== 'gemini') {
+  if (preferGeminiFirst || selectedProvider === 'gemini') {
+    cloudOrder = baseCloudChain;
+  } else {
     cloudOrder = [
       selectedProvider,
       ...baseCloudChain.filter(p => p !== selectedProvider),
     ];
-  } else {
-    cloudOrder = baseCloudChain;
   }
 
   const configuredCloudChain = cloudOrder.filter(provider => {
     if (provider === 'gemini') return configuredKeys.gemini;
-    if (provider === 'claude') return configuredKeys.claude;
-    if (provider === 'openai') return configuredKeys.openai;
-    if (provider === 'groq') return Boolean(configuredKeys.groq);
-    if (provider === 'openrouter') return Boolean(configuredKeys.openrouter);
-    return false;
+    return Boolean(configuredKeys[provider]);
   });
 
   return {

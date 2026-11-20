@@ -24,7 +24,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       aria-label="Navigation mobile"
-      className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#04060C]/95 border-t border-white/[0.08] backdrop-blur-xl px-2 py-1.5 flex items-center justify-around safe-area-pb"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#04060C]/98 border-t border-white/[0.08] px-2 py-1.5 flex items-center justify-around safe-area-pb"
     >
       <button
         type="button"

@@ -30,9 +30,9 @@ export const BLUEPRINT_LIMITS = {
 export interface UserRelaySettings {
   selectedModel: string;
   selectedProvider: AnyAIProvider;
-  claudeKey: string;
-  openaiKey: string;
   groqKey: string;
+  cerebrasKey: string;
+  mistralKey: string;
   openrouterKey: string;
 }
 
@@ -103,11 +103,48 @@ export function serializeUserSettingsPayload(
     ownerId: sanitizeFirestoreId(ownerId, 'user'),
     selectedModel,
     selectedProvider,
-    claudeKey: sanitizeString(settings.claudeKey, BLUEPRINT_LIMITS.MAX_KEY_LEN),
-    openaiKey: sanitizeString(settings.openaiKey, BLUEPRINT_LIMITS.MAX_KEY_LEN),
     groqKey: sanitizeString(settings.groqKey, BLUEPRINT_LIMITS.MAX_KEY_LEN),
+    cerebrasKey: sanitizeString(settings.cerebrasKey, BLUEPRINT_LIMITS.MAX_KEY_LEN),
+    mistralKey: sanitizeString(settings.mistralKey, BLUEPRINT_LIMITS.MAX_KEY_LEN),
     openrouterKey: sanitizeString(settings.openrouterKey, BLUEPRINT_LIMITS.MAX_KEY_LEN),
   };
+}
+
+/**
+ * Fusionne de manière sûre les paramètres locaux et cloud lors de la première connexion d'un appareil :
+ * - Priorité aux valeurs non vides du cloud si présentes
+ * - Préserve toute clé API saisie localement avant connexion si elle est vide dans le cloud
+ */
+export function mergeRelaySettings(
+  local: UserRelaySettings,
+  cloud: UserRelaySettings | null
+): { merged: UserRelaySettings; shouldPushMergedToCloud: boolean } {
+  if (!cloud) {
+    return { merged: local, shouldPushMergedToCloud: true };
+  }
+
+  const pickKey = (cloudVal: string, localVal: string): string => {
+    const c = (cloudVal || '').trim();
+    const l = (localVal || '').trim();
+    return c.length > 0 ? c : l;
+  };
+
+  const merged: UserRelaySettings = {
+    selectedModel: (cloud.selectedModel || '').trim() || local.selectedModel,
+    selectedProvider: cloud.selectedProvider || local.selectedProvider,
+    groqKey: pickKey(cloud.groqKey, local.groqKey),
+    cerebrasKey: pickKey(cloud.cerebrasKey, local.cerebrasKey),
+    mistralKey: pickKey(cloud.mistralKey, local.mistralKey),
+    openrouterKey: pickKey(cloud.openrouterKey, local.openrouterKey),
+  };
+
+  const shouldPushMergedToCloud =
+    merged.groqKey !== (cloud.groqKey || '').trim() ||
+    merged.cerebrasKey !== (cloud.cerebrasKey || '').trim() ||
+    merged.mistralKey !== (cloud.mistralKey || '').trim() ||
+    merged.openrouterKey !== (cloud.openrouterKey || '').trim();
+
+  return { merged, shouldPushMergedToCloud };
 }
 
 export function serializeStudySheetPayload(sheet: StudySheet, ownerId: string) {

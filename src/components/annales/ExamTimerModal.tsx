@@ -65,7 +65,7 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
 
   if (isMinimized) {
     return (
-      <div className="fixed top-20 right-4 z-50 bg-[#0A0E19]/95 border border-amber-400/40 rounded-xl p-3 shadow-2xl backdrop-blur-md flex items-center gap-3 animate-fade-in">
+      <div className="fixed top-20 right-4 z-50 bg-[#0A0E19]/98 border border-amber-400/40 rounded-xl p-3 shadow-2xl flex items-center gap-3 animate-fade-in">
         <div className="flex items-center gap-2">
           <Clock className={`w-4 h-4 ${isUrgent ? 'text-rose-400' : 'text-amber-400'}`} />
           <span className="font-mono text-sm font-bold text-slate-100">
@@ -106,7 +106,7 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
       <div
         role="dialog"
         aria-modal="true"

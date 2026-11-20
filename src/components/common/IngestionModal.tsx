@@ -1,16 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { X, UploadCloud, FileText, CheckCircle2, Loader2, Sparkles, AlertTriangle, FileCode } from 'lucide-react';
 import { extractTextFromPdf } from '../../services/pdfService';
-import { transformLectureToToolbox, parseTdDocument } from '../../services/aiService';
+import {
+  AIExtractionProgress,
+  parseTdDocument,
+  transformLectureToToolbox,
+} from '../../services/aiService';
 import { AnnaleItem, StudySheet, TDExercise } from '../../types/course';
 import { availableSubjects } from '../../data/initialData';
 import { resolveSubjectId } from '../../utils/courseCatalog';
+import { mapTabToDestination } from '../../utils/pdfTelemetry';
+import { MainTab } from './Header';
 import { SpiderExtractionScanner } from './SpiderExtractionScanner';
 
 interface IngestionModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultSubjectId?: string | 'all';
+  defaultTargetType?: MainTab;
   onSheetCreated: (sheet: StudySheet) => void;
   onTdCreated: (exercises: TDExercise[]) => void;
   onAnnalesCreated: (annales: AnnaleItem[]) => void;
@@ -22,12 +29,15 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
   isOpen,
   onClose,
   defaultSubjectId,
+  defaultTargetType,
   onSheetCreated,
   onTdCreated,
   onAnnalesCreated,
 }) => {
   const validSubjectIds = availableSubjects.map(s => s.id);
-  const [targetType, setTargetType] = useState<DestinationType>('sheet');
+  const [targetType, setTargetType] = useState<DestinationType>(() =>
+    mapTabToDestination(defaultTargetType)
+  );
   const [targetSubjectId, setTargetSubjectId] = useState<string>(() =>
     resolveSubjectId(defaultSubjectId, validSubjectIds)
   );
@@ -35,18 +45,37 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progressStep, setProgressStep] = useState<string>('');
-  const [pdfPageProgress, setPdfPageProgress] = useState<{ current: number; total: number } | null>(null);
+  const [pdfProgress, setPdfProgress] = useState<{
+    current: number;
+    total: number;
+    done: boolean;
+  } | null>(null);
+  const [aiProgress, setAiProgress] = useState<AIExtractionProgress | null>(null);
+  const [liveDocText, setLiveDocText] = useState<string>('');
+  const [usingLocalMode, setUsingLocalMode] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
+  const [consentFailureDetails, setConsentFailureDetails] = useState<string[]>([]);
   const [pendingTextToProcess, setPendingTextToProcess] = useState<string>('');
 
+  // Synchronise automatiquement Anneau 1 (destination) et Anneau 2 (matière) à l'ouverture
   useEffect(() => {
     if (isOpen) {
-      setTargetSubjectId(resolveSubjectId(defaultSubjectId, availableSubjects.map(s => s.id)));
+      setTargetType(mapTabToDestination(defaultTargetType));
+      setTargetSubjectId(
+        resolveSubjectId(
+          defaultSubjectId,
+          availableSubjects.map(s => s.id)
+        )
+      );
+      setErrorMessage(null);
     }
-  }, [isOpen, defaultSubjectId]);
+  }, [isOpen, defaultTargetType, defaultSubjectId]);
 
   if (!isOpen) return null;
+
+  const activeSubjectName =
+    availableSubjects.find(s => s.id === targetSubjectId)?.name || 'Matière';
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -71,10 +100,20 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
     }
   };
 
+  const resetProcessingTelemetry = () => {
+    setIsProcessing(false);
+    setPdfProgress(null);
+    setAiProgress(null);
+    setUsingLocalMode(false);
+  };
+
   const executeExtraction = async (text: string, forceLocal = false) => {
     setIsProcessing(true);
     setErrorMessage(null);
     setShowConsentDialog(false);
+    setLiveDocText(text);
+    setUsingLocalMode(forceLocal);
+    setAiProgress(null);
 
     try {
       if (targetType === 'sheet') {
@@ -83,7 +122,12 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
             ? 'Génération locale de la fiche...'
             : 'Extraction de la fiche de révision via IA...'
         );
-        const newSheet = await transformLectureToToolbox(text, forceLocal, targetSubjectId);
+        const newSheet = await transformLectureToToolbox(
+          text,
+          forceLocal,
+          targetSubjectId,
+          prog => setAiProgress(prog)
+        );
         onSheetCreated(newSheet);
       } else if (targetType === 'td') {
         setProgressStep(
@@ -91,7 +135,13 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
             ? 'Découpage local des exercices...'
             : 'Découpage du TD et génération des résolutions...'
         );
-        const exercises = (await parseTdDocument(text, 'td', forceLocal, targetSubjectId)) as TDExercise[];
+        const exercises = (await parseTdDocument(
+          text,
+          'td',
+          forceLocal,
+          targetSubjectId,
+          prog => setAiProgress(prog)
+        )) as TDExercise[];
         onTdCreated(exercises);
       } else {
         setProgressStep(
@@ -99,18 +149,27 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
             ? "Découpage local de l'annale..."
             : "Découpage de l'annale et barème officiel..."
         );
-        const annales = (await parseTdDocument(text, 'annale', forceLocal, targetSubjectId)) as AnnaleItem[];
+        const annales = (await parseTdDocument(
+          text,
+          'annale',
+          forceLocal,
+          targetSubjectId,
+          prog => setAiProgress(prog)
+        )) as AnnaleItem[];
         onAnnalesCreated(annales);
       }
 
-      setIsProcessing(false);
+      resetProcessingTelemetry();
+      setLiveDocText('');
       setSelectedFile(null);
       setRawText('');
       onClose();
     } catch (err: any) {
       setIsProcessing(false);
+      setUsingLocalMode(false);
       if (err?.message === 'REQUIRE_USER_CONSENT') {
         setPendingTextToProcess(text);
+        setConsentFailureDetails(Array.isArray(err?.details) ? err.details : []);
         setShowConsentDialog(true);
       } else {
         setErrorMessage(err?.message || 'Une erreur inattendue est survenue.');
@@ -121,26 +180,40 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+    setConsentFailureDetails([]);
+    setAiProgress(null);
 
     let contentToIngest = rawText.trim();
 
     if (selectedFile) {
       setIsProcessing(true);
+      setUsingLocalMode(false);
+      setLiveDocText('');
+      setPdfProgress({ current: 0, total: 0, done: false });
       setProgressStep('Extraction locale du texte PDF...');
       try {
-        contentToIngest = await extractTextFromPdf(selectedFile, (current, total) => {
-          setPdfPageProgress({ current, total });
+        contentToIngest = await extractTextFromPdf(selectedFile, p => {
+          setPdfProgress({ current: p.current, total: p.total, done: false });
+          if (p.accumulatedText) {
+            setLiveDocText(p.accumulatedText);
+          }
         });
-        setPdfPageProgress(null);
+        setPdfProgress(prev =>
+          prev ? { current: prev.total || 1, total: prev.total || 1, done: true } : { current: 1, total: 1, done: true }
+        );
+        setLiveDocText(contentToIngest);
       } catch (pdfErr: any) {
-        setIsProcessing(false);
+        resetProcessingTelemetry();
         setErrorMessage(`Erreur lecture PDF : ${pdfErr.message}`);
         return;
       }
+    } else {
+      setPdfProgress({ current: 1, total: 1, done: true });
+      setLiveDocText(contentToIngest);
     }
 
     if (!contentToIngest || contentToIngest.length < 30) {
-      setIsProcessing(false);
+      resetProcessingTelemetry();
       setErrorMessage('Le contenu fourni est trop court ou vide pour une extraction exploitable.');
       return;
     }
@@ -149,7 +222,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
       <div
         role="dialog"
         aria-modal="true"
@@ -158,16 +231,24 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-[#04060C]">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-400/35">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-400/35 shrink-0">
               <Sparkles className="w-4 h-4" />
             </div>
-            <div>
-              <h2 className="font-display text-base font-bold text-slate-100">
+            <div className="min-w-0">
+              <h2 className="font-display text-base font-bold text-slate-100 truncate">
                 Ingestion de Documents & Cours
               </h2>
-              <p className="text-xs text-slate-400">
-                Traitement PDF local · Extraction en Fiche, TD ou Annale
+              <p className="text-xs text-slate-400 truncate">
+                Pré-sélectionné :{' '}
+                <span className="text-amber-300 font-medium">
+                  {targetType === 'sheet'
+                    ? 'Fiche de Cours'
+                    : targetType === 'td'
+                    ? 'Feuille de TD'
+                    : "Annale d'Examen"}
+                </span>{' '}
+                · <span className="text-sky-300 font-medium">{activeSubjectName}</span>
               </p>
             </div>
           </div>
@@ -176,7 +257,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
             onClick={onClose}
             disabled={isProcessing}
             aria-label="Fermer l'ingestion"
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-50 shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -189,14 +270,23 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
               <div className="flex items-center gap-2 text-amber-300">
                 <AlertTriangle className="w-5 h-5 shrink-0" />
                 <h4 className="font-display font-bold text-sm">
-                  Services IA temporairement indisponibles
+                  Toutes les IA cloud ont échoué ou ne sont pas configurées
                 </h4>
               </div>
               <p className="text-xs text-slate-200 leading-relaxed">
-                Gemini, Claude et ChatGPT n'ont pas pu être joints (ou aucune clé API n'est configurée). Voulez-vous
-                basculer en dernier recours sur le <strong>Mode Local</strong> (extraction hors-ligne dans votre
-                navigateur) ?
+                Gemini et l’ensemble des relais disponibles (Groq, Cerebras, Mistral, OpenRouter) n’ont pas pu
+                générer le document. Voulez-vous basculer sur le <strong>Mode Local</strong> (extraction hors-ligne
+                dans votre navigateur) ?
               </p>
+              {consentFailureDetails.length > 0 && (
+                <ul className="text-[11px] font-mono text-amber-200/90 bg-[#04060C]/70 border border-white/[0.08] rounded-lg p-2.5 space-y-1 max-h-28 overflow-y-auto">
+                  {consentFailureDetails.slice(0, 5).map((detail, i) => (
+                    <li key={i} className="truncate">
+                      • {detail}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="flex flex-wrap gap-2 pt-1">
                 <button
                   type="button"
@@ -218,15 +308,16 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
 
           <div>
             <span className="block text-xs font-semibold text-slate-300 mb-2">
-              Destination de la transformation
+              Destination de la transformation (Anneau 1)
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
                 type="button"
+                aria-pressed={targetType === 'sheet'}
                 onClick={() => setTargetType('sheet')}
                 className={`flex flex-col items-center justify-center p-3.5 rounded-xl border text-center transition-colors ${
                   targetType === 'sheet'
-                    ? 'bg-[#101625] border-amber-400/50 text-white'
+                    ? 'bg-[#141A2C] border-amber-400 ring-1 ring-amber-400/40 text-white shadow-[0_0_20px_-8px_rgba(245,158,11,0.5)]'
                     : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
@@ -237,10 +328,11 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
 
               <button
                 type="button"
+                aria-pressed={targetType === 'td'}
                 onClick={() => setTargetType('td')}
                 className={`flex flex-col items-center justify-center p-3.5 rounded-xl border text-center transition-colors ${
                   targetType === 'td'
-                    ? 'bg-[#101625] border-sky-400/50 text-white'
+                    ? 'bg-[#101C2E] border-sky-400 ring-1 ring-sky-400/40 text-white shadow-[0_0_20px_-8px_rgba(56,189,248,0.5)]'
                     : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
@@ -251,10 +343,11 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
 
               <button
                 type="button"
+                aria-pressed={targetType === 'annale'}
                 onClick={() => setTargetType('annale')}
                 className={`flex flex-col items-center justify-center p-3.5 rounded-xl border text-center transition-colors ${
                   targetType === 'annale'
-                    ? 'bg-[#101625] border-emerald-400/50 text-white'
+                    ? 'bg-[#0F2320] border-emerald-400 ring-1 ring-emerald-400/40 text-white shadow-[0_0_20px_-8px_rgba(16,185,129,0.5)]'
                     : 'bg-[#04060C] border-white/[0.08] text-slate-400 hover:text-slate-100'
                 }`}
               >
@@ -267,7 +360,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
 
           <div>
             <label htmlFor="ingestSubjectSelect" className="block text-xs font-semibold text-slate-300 mb-2">
-              Matière associée
+              Matière associée (Anneau 2)
             </label>
             <select
               id="ingestSubjectSelect"
@@ -358,11 +451,13 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
           {isProcessing && (
             <div className="p-4 rounded-xl bg-[#04060C] border border-amber-400/35 flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-amber-400 animate-spin shrink-0" />
-              <div>
-                <p className="text-xs font-semibold text-white">{progressStep}</p>
-                {pdfPageProgress && (
-                  <p className="text-[11px] text-amber-300 font-mono">
-                    Analyse page {pdfPageProgress.current} sur {pdfPageProgress.total}...
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white truncate">
+                  {aiProgress?.stepLabel || progressStep}
+                </p>
+                {pdfProgress && pdfProgress.total > 0 && !pdfProgress.done && (
+                  <p className="text-[11px] text-sky-300 font-mono">
+                    Lecture page {pdfProgress.current} sur {pdfProgress.total}...
                   </p>
                 )}
               </div>
@@ -406,8 +501,11 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
         fileName={selectedFile?.name}
         targetType={targetType}
         progressStep={progressStep}
-        pdfPageProgress={pdfPageProgress}
-        rawTextSample={rawText || undefined}
+        hasPdfFile={Boolean(selectedFile)}
+        pdfProgress={pdfProgress}
+        aiProgress={aiProgress}
+        liveText={liveDocText || rawText}
+        forceLocalMode={usingLocalMode}
       />
     </div>
   );

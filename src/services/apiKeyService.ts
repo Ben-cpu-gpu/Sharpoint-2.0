@@ -5,9 +5,9 @@ import {
   normalizeStoredProvider,
 } from '../utils/aiFallbackOrder';
 
-const ANTHROPIC_KEY_STORAGE = 'fichemaster_anthropic_api_key';
-const OPENAI_KEY_STORAGE = 'fichemaster_openai_api_key';
 const GROQ_KEY_STORAGE = 'fichemaster_groq_api_key';
+const CEREBRAS_KEY_STORAGE = 'fichemaster_cerebras_api_key';
+const MISTRAL_KEY_STORAGE = 'fichemaster_mistral_api_key';
 const OPENROUTER_KEY_STORAGE = 'fichemaster_openrouter_api_key';
 const SELECTED_MODEL_STORAGE = 'fichemaster_selected_model';
 const SELECTED_PROVIDER_STORAGE = 'fichemaster_selected_provider';
@@ -35,15 +35,15 @@ export interface ModelOption {
 }
 
 export const ALL_MODELS: ModelOption[] = [
-  // --- 1. GOOGLE GEMINI (EXÉCUTÉ CÔTÉ SERVEUR) ---
+  // --- 1. GOOGLE GEMINI (EXÉCUTÉ CÔTÉ SERVEUR · PRIORITÉ #1) ---
   {
     id: 'gemini-4-hydrogen',
     provider: 'gemini',
     name: 'Gemini 4 Hydrogen',
-    badge: 'Serveur · Recommandé',
+    badge: '1er · Serveur Prioritaire',
     isFreeTier: true,
     sourceLabel: 'Serveur Gemini (@google/genai)',
-    description: 'Modèle principal rapide et fiable exécuté côté serveur pour fiches, TD, annales et QCM',
+    description: 'Modèle prioritaire rapide et fiable exécuté côté serveur pour fiches, TD, annales et QCM',
   },
   {
     id: 'gemini-3.1-flash-lite',
@@ -73,55 +73,15 @@ export const ALL_MODELS: ModelOption[] = [
     description: 'Calculs formels avancés, démonstrations et sujets d\'annales ESTACA',
   },
 
-  // --- 2. ANTHROPIC CLAUDE ---
-  {
-    id: 'claude-sonnet-4-20250514',
-    provider: 'claude',
-    name: 'Claude Sonnet 4',
-    badge: 'Anthropic',
-    isFreeTier: false,
-    sourceLabel: 'Anthropic Console',
-    description: 'Rédaction rigoureuse et démonstrations mathématiques pas à pas',
-  },
-  {
-    id: 'claude-3-5-haiku-latest',
-    provider: 'claude',
-    name: 'Claude 3.5 Haiku',
-    badge: 'Anthropic',
-    isFreeTier: false,
-    sourceLabel: 'Anthropic Console',
-    description: 'Synthèse rapide des théorèmes et génération de flashcards',
-  },
-
-  // --- 3. OPENAI CHATGPT ---
-  {
-    id: 'gpt-4o',
-    provider: 'openai',
-    name: 'ChatGPT GPT-4o',
-    badge: 'OpenAI',
-    isFreeTier: false,
-    sourceLabel: 'OpenAI Platform',
-    description: 'Raisonnement scientifique polyvalent et structuration JSON stricte',
-  },
-  {
-    id: 'gpt-4o-mini',
-    provider: 'openai',
-    name: 'ChatGPT GPT-4o mini',
-    badge: 'OpenAI · Économique',
-    isFreeTier: false,
-    sourceLabel: 'OpenAI Platform',
-    description: 'Version rapide et peu coûteuse pour QCM et variantes de TD',
-  },
-
-  // --- GROQ CLOUD (SOURCE SÛRE · GRATUIT SANS CARTE BANCAIRE) ---
+  // --- 2. GROQ CLOUD (awesome-free-llm-apis · SANS CARTE BANCAIRE) ---
   {
     id: 'llama-3.3-70b-versatile',
     provider: 'groq',
     name: 'Llama 3.3 70B Versatile',
     badge: 'Gratuit · Groq',
     isFreeTier: true,
-    sourceLabel: 'Groq Cloud (Meta Open-Weights)',
-    description: 'Inférence ultra-rapide gratuite (console.groq.com), très performant en sciences',
+    sourceLabel: 'awesome-free-llm-apis · Groq LPU',
+    description: 'Inférence LPU ultra-rapide gratuite sans CB (console.groq.com), très performant en sciences',
   },
   {
     id: 'qwen/qwen3-32b',
@@ -129,7 +89,7 @@ export const ALL_MODELS: ModelOption[] = [
     name: 'Qwen 3 32B',
     badge: 'Gratuit · Groq',
     isFreeTier: true,
-    sourceLabel: 'Groq Cloud (Alibaba Open-Weights)',
+    sourceLabel: 'awesome-free-llm-apis · Groq LPU',
     description: 'Modèle ouvert performant en mathématiques, physique et code',
   },
   {
@@ -138,18 +98,67 @@ export const ALL_MODELS: ModelOption[] = [
     name: 'Llama 3.1 8B Instant',
     badge: 'Gratuit · Groq',
     isFreeTier: true,
-    sourceLabel: 'Groq Cloud (Free Tier)',
-    description: 'Réponse quasi instantanée avec limites de requêtes gratuites très larges',
+    sourceLabel: 'awesome-free-llm-apis · Groq Free Tier',
+    description: 'Réponse quasi instantanée avec quotas gratuits quotidiens élevés',
   },
 
-  // --- OPENROUTER (:free OFFICIEL · 0€) ---
+  // --- 3. CEREBRAS CLOUD (awesome-free-llm-apis · 1M TOKENS/JOUR GRATUITS) ---
+  {
+    id: 'llama-3.3-70b',
+    provider: 'cerebras',
+    name: 'Llama 3.3 70B (Cerebras)',
+    badge: 'Gratuit · Cerebras',
+    isFreeTier: true,
+    sourceLabel: 'awesome-free-llm-apis · Cerebras 1M tok/j',
+    description: '1 million de tokens gratuits/jour sans carte bancaire (cloud.cerebras.ai) à débit record',
+  },
+  {
+    id: 'qwen-3-32b',
+    provider: 'cerebras',
+    name: 'Qwen 3 32B (Cerebras)',
+    badge: 'Gratuit · Cerebras',
+    isFreeTier: true,
+    sourceLabel: 'awesome-free-llm-apis · Cerebras Free',
+    description: 'Raisonnement scientifique et équations LaTeX haute vitesse sur puce Wafer-Scale',
+  },
+  {
+    id: 'llama3.1-8b',
+    provider: 'cerebras',
+    name: 'Llama 3.1 8B (Cerebras)',
+    badge: 'Gratuit · Cerebras',
+    isFreeTier: true,
+    sourceLabel: 'awesome-free-llm-apis · Cerebras Free',
+    description: 'Modèle léger ultra-rapide pour QCM et fiches express',
+  },
+
+  // --- 4. MISTRAL AI (awesome-free-llm-apis · TIER EXPERIMENT GRATUIT) ---
+  {
+    id: 'mistral-small-latest',
+    provider: 'mistral',
+    name: 'Mistral Small Latest',
+    badge: 'Gratuit · Mistral',
+    isFreeTier: true,
+    sourceLabel: 'awesome-free-llm-apis · La Plateforme FR',
+    description: 'Modèle français gratuit en tier Experiment (console.mistral.ai) avec excellent français scientifique',
+  },
+  {
+    id: 'open-mistral-nemo',
+    provider: 'mistral',
+    name: 'Open Mistral Nemo',
+    badge: 'Gratuit · Mistral',
+    isFreeTier: true,
+    sourceLabel: 'awesome-free-llm-apis · La Plateforme FR',
+    description: 'Modèle ouvert multilingue optimisé pour synthèses structurées et JSON',
+  },
+
+  // --- 5. OPENROUTER (:free OFFICIEL · awesome-free-llm-apis · 0€) ---
   {
     id: 'meta-llama/llama-3.3-70b-instruct:free',
     provider: 'openrouter',
     name: 'Llama 3.3 70B Instruct (:free)',
     badge: 'Gratuit · OpenRouter',
     isFreeTier: true,
-    sourceLabel: 'OpenRouter Official :free',
+    sourceLabel: 'awesome-free-llm-apis · OpenRouter :free',
     description: 'Route gratuite officielle OpenRouter (0€) basée sur Meta Llama 3.3',
   },
   {
@@ -158,7 +167,7 @@ export const ALL_MODELS: ModelOption[] = [
     name: 'DeepSeek R1 (:free)',
     badge: 'Gratuit · OpenRouter',
     isFreeTier: true,
-    sourceLabel: 'OpenRouter Official :free',
+    sourceLabel: 'awesome-free-llm-apis · OpenRouter :free',
     description: 'Modèle de raisonnement mathématique et physique pas-à-pas gratuit',
   },
   {
@@ -167,49 +176,23 @@ export const ALL_MODELS: ModelOption[] = [
     name: 'Gemma 3 27B (:free)',
     badge: 'Gratuit · OpenRouter',
     isFreeTier: true,
-    sourceLabel: 'OpenRouter Official :free',
+    sourceLabel: 'awesome-free-llm-apis · OpenRouter :free',
     description: 'Modèle ouvert Google Gemma 3 hébergé sur tier gratuit OpenRouter',
   },
 
-  // --- 4. MODE LOCAL (DERNIER RECOURS) ---
+  // --- 6. MODE LOCAL (DERNIER RECOURS) ---
   {
     id: LOCAL_FALLBACK_MODEL_ID,
     provider: 'local',
     name: 'Mode Local (Dernier recours)',
-    badge: '4e · Offline',
+    badge: 'Dernier recours · Offline',
     isFreeTier: true,
     sourceLabel: 'Navigateur (100% Hors-ligne)',
-    description: 'Extraction hors-ligne dans votre navigateur uniquement en dernier recours après Gemini, Claude et ChatGPT',
+    description: 'Extraction hors-ligne dans votre navigateur uniquement si Gemini et toutes les API gratuites sont indisponibles',
   },
 ];
 
-// --- GESTION DES CLÉS ANTHROPIC CLAUDE ---
-export function getAnthropicApiKey(): string {
-  const stored = localStorage.getItem(ANTHROPIC_KEY_STORAGE);
-  if (stored && stored.trim().length > 0) return stored.trim();
-  const envKey = (import.meta as any).env?.VITE_ANTHROPIC_API_KEY;
-  if (envKey && envKey.trim().length > 0) return envKey.trim();
-  return '';
-}
-export function setAnthropicApiKey(key: string): void {
-  if (key && key.trim()) localStorage.setItem(ANTHROPIC_KEY_STORAGE, key.trim());
-  else localStorage.removeItem(ANTHROPIC_KEY_STORAGE);
-}
-
-// --- GESTION DES CLÉS OPENAI ---
-export function getOpenAIApiKey(): string {
-  const stored = localStorage.getItem(OPENAI_KEY_STORAGE);
-  if (stored && stored.trim().length > 0) return stored.trim();
-  const envKey = (import.meta as any).env?.VITE_OPENAI_API_KEY;
-  if (envKey && envKey.trim().length > 0) return envKey.trim();
-  return '';
-}
-export function setOpenAIApiKey(key: string): void {
-  if (key && key.trim()) localStorage.setItem(OPENAI_KEY_STORAGE, key.trim());
-  else localStorage.removeItem(OPENAI_KEY_STORAGE);
-}
-
-// --- GESTION DES CLÉS GROQ (Tier Gratuit) ---
+// --- GESTION DES CLÉS GROQ (awesome-free-llm-apis) ---
 export function getGroqApiKey(): string {
   const stored = localStorage.getItem(GROQ_KEY_STORAGE);
   if (stored && stored.trim().length > 0) return stored.trim();
@@ -222,7 +205,33 @@ export function setGroqApiKey(key: string): void {
   else localStorage.removeItem(GROQ_KEY_STORAGE);
 }
 
-// --- GESTION DES CLÉS OPENROUTER (:free) ---
+// --- GESTION DES CLÉS CEREBRAS (awesome-free-llm-apis) ---
+export function getCerebrasApiKey(): string {
+  const stored = localStorage.getItem(CEREBRAS_KEY_STORAGE);
+  if (stored && stored.trim().length > 0) return stored.trim();
+  const envKey = (import.meta as any).env?.VITE_CEREBRAS_API_KEY;
+  if (envKey && envKey.trim().length > 0) return envKey.trim();
+  return '';
+}
+export function setCerebrasApiKey(key: string): void {
+  if (key && key.trim()) localStorage.setItem(CEREBRAS_KEY_STORAGE, key.trim());
+  else localStorage.removeItem(CEREBRAS_KEY_STORAGE);
+}
+
+// --- GESTION DES CLÉS MISTRAL AI (awesome-free-llm-apis) ---
+export function getMistralApiKey(): string {
+  const stored = localStorage.getItem(MISTRAL_KEY_STORAGE);
+  if (stored && stored.trim().length > 0) return stored.trim();
+  const envKey = (import.meta as any).env?.VITE_MISTRAL_API_KEY;
+  if (envKey && envKey.trim().length > 0) return envKey.trim();
+  return '';
+}
+export function setMistralApiKey(key: string): void {
+  if (key && key.trim()) localStorage.setItem(MISTRAL_KEY_STORAGE, key.trim());
+  else localStorage.removeItem(MISTRAL_KEY_STORAGE);
+}
+
+// --- GESTION DES CLÉS OPENROUTER (:free · awesome-free-llm-apis) ---
 export function getOpenRouterApiKey(): string {
   const stored = localStorage.getItem(OPENROUTER_KEY_STORAGE);
   if (stored && stored.trim().length > 0) return stored.trim();
@@ -241,7 +250,11 @@ export function getSelectedModel(): string {
   const normalized = normalizeStoredModelId(stored);
   if (stored && stored !== normalized) {
     localStorage.setItem(SELECTED_MODEL_STORAGE, normalized);
-    if (stored === 'local-priority') {
+    if (
+      stored === 'local-priority' ||
+      stored.startsWith('claude-') ||
+      stored.startsWith('gpt-')
+    ) {
       localStorage.setItem(SELECTED_PROVIDER_STORAGE, 'gemini');
     }
   }
@@ -272,9 +285,9 @@ export function setSelectedProvider(provider: AIProvider): void {
 export function hasKeyForProvider(provider: AIProvider): boolean {
   if (provider === 'local') return true;
   if (provider === 'gemini') return serverGeminiConfigured;
-  if (provider === 'claude') return getAnthropicApiKey().length > 0;
-  if (provider === 'openai') return getOpenAIApiKey().length > 0;
   if (provider === 'groq') return getGroqApiKey().length > 0;
+  if (provider === 'cerebras') return getCerebrasApiKey().length > 0;
+  if (provider === 'mistral') return getMistralApiKey().length > 0;
   if (provider === 'openrouter') return getOpenRouterApiKey().length > 0;
   return false;
 }

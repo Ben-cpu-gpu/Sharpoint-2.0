@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
+import {
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  User,
+} from 'firebase/auth';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { CosmicBackdrop } from './components/common/CosmicBackdrop';
 import { Header, MainTab } from './components/common/Header';
@@ -9,7 +16,7 @@ import { DebugDrawer } from './components/common/DebugDrawer';
 import { IngestionModal } from './components/common/IngestionModal';
 import { SolarSystemNav } from './components/common/SolarSystemNav';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
-import { CloudSyncState } from './components/common/CloudSyncControl';
+import { CloudSyncState, MobileAuthError } from './components/common/CloudSyncControl';
 import { SheetViewer } from './components/sheets/SheetViewer';
 import { SheetEditor } from './components/sheets/SheetEditor';
 import { RevisionModal } from './components/sheets/RevisionModal';
@@ -21,7 +28,11 @@ import {
   resolveActiveSheet,
   resolveSubjectId,
 } from './utils/courseCatalog';
-import { mergeLocalAndCloudById, UserRelaySettings } from './utils/cloudSyncHelpers';
+import {
+  mergeLocalAndCloudById,
+  mergeRelaySettings,
+  UserRelaySettings,
+} from './utils/cloudSyncHelpers';
 import {
   loadInitialData,
   saveAppData,
@@ -30,16 +41,16 @@ import {
 } from './services/storageService';
 import {
   AIProvider,
-  getAnthropicApiKey,
+  getCerebrasApiKey,
   getGroqApiKey,
-  getOpenAIApiKey,
+  getMistralApiKey,
   getOpenRouterApiKey,
   getSelectedModel,
   getSelectedProvider,
   hasKeyForProvider,
-  setAnthropicApiKey,
+  setCerebrasApiKey,
   setGroqApiKey,
-  setOpenAIApiKey,
+  setMistralApiKey,
   setOpenRouterApiKey,
   setSelectedModel,
 } from './services/apiKeyService';
@@ -93,14 +104,35 @@ export const App: React.FC = () => {
   const [authReady, setAuthReady] = useState(false);
   const [syncState, setSyncState] = useState<CloudSyncState>('offline_local');
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<MobileAuthError | null>(null);
   const [fatalFirestoreError, setFatalFirestoreError] = useState<Error | null>(null);
+
+  const [focusMode, setFocusMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('fichemaster_focus_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleFocusMode = () => {
+    setFocusMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('fichemaster_focus_mode', String(next));
+      } catch {
+        // Ignore storage restriction
+      }
+      return next;
+    });
+  };
 
   const latestLocalDataRef = useRef({ sheets, tdExercises, annales });
   latestLocalDataRef.current = { sheets, tdExercises, annales };
   const migratedUidsRef = useRef<Set<string>>(new Set());
 
   const buildInitialHealthMap = (): Record<AIProvider, ProviderHealthResult> => {
-    const providers: AIProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
+    const providers: AIProvider[] = ['gemini', 'groq', 'cerebras', 'mistral', 'openrouter', 'local'];
     const map = {} as Record<AIProvider, ProviderHealthResult>;
     for (const p of providers) {
       if (p === 'local') {
@@ -110,9 +142,9 @@ export const App: React.FC = () => {
           latencyMs: 1,
           statusCode: 200,
           testedModel: 'Regex Client-Side',
-          message: 'Extraction client-side disponible (4e · dernier recours).',
+          message: 'Extraction client-side disponible (dernier recours).',
         };
-        } else if (p === 'gemini') {
+      } else if (p === 'gemini') {
         map[p] = {
           provider: p,
           status: 'untested',
@@ -178,15 +210,61 @@ export const App: React.FC = () => {
   const getCurrentLocalRelaySettings = (): UserRelaySettings => ({
     selectedModel: getSelectedModel(),
     selectedProvider: getSelectedProvider(),
-    claudeKey: getAnthropicApiKey(),
-    openaiKey: getOpenAIApiKey(),
     groqKey: getGroqApiKey(),
+    cerebrasKey: getCerebrasApiKey(),
+    mistralKey: getMistralApiKey(),
     openrouterKey: getOpenRouterApiKey(),
   });
+
+  const classifyAuthError = (err: any): MobileAuthError | null => {
+    const code = String(err?.code || '');
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      return null;
+    }
+    const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+    const isUnauthorizedDomain = code === 'auth/unauthorized-domain';
+    const canRetryRedirect =
+      !isUnauthorizedDomain &&
+      (code === 'auth/popup-blocked' ||
+        code === 'auth/operation-not-supported-in-this-environment' ||
+        code === 'auth/internal-error' ||
+        code === 'auth/web-storage-unsupported' ||
+        code === 'auth/network-request-failed' ||
+        code === '');
+
+    const message = isUnauthorizedDomain
+      ? `Firebase refuse la connexion car le domaine "${hostname}" n'est pas encore dans la liste des domaines autorisés du projet.`
+      : code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment'
+      ? 'La fenêtre Google a été bloquée par le navigateur mobile. Essayez la connexion par redirection.'
+      : err?.message || 'Authentification Google impossible sur cet appareil.';
+
+    return {
+      code,
+      message,
+      hostname,
+      isUnauthorizedDomain,
+      canRetryRedirect,
+    };
+  };
 
   useEffect(() => {
     let activeUnsub: (() => void) | null = null;
     let cancelled = false;
+
+    void getRedirectResult(auth)
+      .then(result => {
+        if (!cancelled && result?.user) {
+          setAuthError(null);
+          showToast('Connexion Google réussie · Synchronisation cloud active.');
+        }
+      })
+      .catch(err => {
+        if (cancelled) return;
+        const classified = classifyAuthError(err);
+        if (classified) {
+          setAuthError(classified);
+        }
+      });
 
     const unsubAuth = onAuthStateChanged(auth, async user => {
       if (activeUnsub) {
@@ -203,6 +281,7 @@ export const App: React.FC = () => {
         setSyncError(null);
         return;
       }
+      setAuthError(null);
 
       setCloudUser(user);
       setAuthReady(true);
@@ -221,6 +300,7 @@ export const App: React.FC = () => {
           cloudSheets: [] as StudySheet[],
           cloudTd: [] as TDExercise[],
           cloudAnnales: [] as AnnaleItem[],
+          cloudSettings: null as UserRelaySettings | null,
           cloudSettingsExists: false,
         };
 
@@ -253,8 +333,13 @@ export const App: React.FC = () => {
             });
           }
 
-          if (!loaded.cloudSettingsExists) {
-            await saveUserSettingsInCloud(user.uid, getCurrentLocalRelaySettings());
+          const { merged: mergedSettings, shouldPushMergedToCloud } = mergeRelaySettings(
+            getCurrentLocalRelaySettings(),
+            loaded.cloudSettingsExists ? loaded.cloudSettings : null
+          );
+
+          if (!loaded.cloudSettingsExists || shouldPushMergedToCloud) {
+            await saveUserSettingsInCloud(user.uid, mergedSettings);
           }
           setSyncState('synced');
         };
@@ -263,37 +348,50 @@ export const App: React.FC = () => {
           onSheets: cloudSheets => {
             loaded.sheets = true;
             loaded.cloudSheets = cloudSheets;
-            setSheets(cloudSheets);
-            saveAppData(cloudSheets, latestLocalDataRef.current.tdExercises, latestLocalDataRef.current.annales);
-            setActiveSheetId(prev => (prev && cloudSheets.some(s => s.id === prev) ? prev : cloudSheets[0]?.id || ''));
+            const nextSheets = !migratedUidsRef.current.has(user.uid)
+              ? mergeLocalAndCloudById(latestLocalDataRef.current.sheets, cloudSheets).merged
+              : cloudSheets;
+            setSheets(nextSheets);
+            saveAppData(nextSheets, latestLocalDataRef.current.tdExercises, latestLocalDataRef.current.annales);
+            setActiveSheetId(prev => (prev && nextSheets.some(s => s.id === prev) ? prev : nextSheets[0]?.id || ''));
             void maybeRunInitialMigration();
             setSyncState('synced');
           },
           onTdExercises: cloudTd => {
             loaded.td = true;
             loaded.cloudTd = cloudTd;
-            setTdExercises(cloudTd);
-            saveAppData(latestLocalDataRef.current.sheets, cloudTd, latestLocalDataRef.current.annales);
+            const nextTd = !migratedUidsRef.current.has(user.uid)
+              ? mergeLocalAndCloudById(latestLocalDataRef.current.tdExercises, cloudTd).merged
+              : cloudTd;
+            setTdExercises(nextTd);
+            saveAppData(latestLocalDataRef.current.sheets, nextTd, latestLocalDataRef.current.annales);
             void maybeRunInitialMigration();
             setSyncState('synced');
           },
           onAnnales: cloudAnnales => {
             loaded.annales = true;
             loaded.cloudAnnales = cloudAnnales;
-            setAnnales(cloudAnnales);
-            saveAppData(latestLocalDataRef.current.sheets, latestLocalDataRef.current.tdExercises, cloudAnnales);
+            const nextAnnales = !migratedUidsRef.current.has(user.uid)
+              ? mergeLocalAndCloudById(latestLocalDataRef.current.annales, cloudAnnales).merged
+              : cloudAnnales;
+            setAnnales(nextAnnales);
+            saveAppData(latestLocalDataRef.current.sheets, latestLocalDataRef.current.tdExercises, nextAnnales);
             void maybeRunInitialMigration();
             setSyncState('synced');
           },
           onSettings: (cloudSettings, exists) => {
             loaded.settings = true;
             loaded.cloudSettingsExists = exists;
+            loaded.cloudSettings = cloudSettings;
             if (exists && cloudSettings) {
-              setAnthropicApiKey(cloudSettings.claudeKey);
-              setOpenAIApiKey(cloudSettings.openaiKey);
-              setGroqApiKey(cloudSettings.groqKey);
-              setOpenRouterApiKey(cloudSettings.openrouterKey);
-              setSelectedModel(cloudSettings.selectedModel);
+              const appliedSettings = !migratedUidsRef.current.has(user.uid)
+                ? mergeRelaySettings(getCurrentLocalRelaySettings(), cloudSettings).merged
+                : cloudSettings;
+              setGroqApiKey(appliedSettings.groqKey);
+              setCerebrasApiKey(appliedSettings.cerebrasKey);
+              setMistralApiKey(appliedSettings.mistralKey);
+              setOpenRouterApiKey(appliedSettings.openrouterKey);
+              setSelectedModel(appliedSettings.selectedModel);
               refreshHealthStatusesAfterKeyUpdate();
             }
             void maybeRunInitialMigration();
@@ -324,16 +422,50 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  const handleRetryRedirectSignIn = async () => {
+    try {
+      setSyncState('connecting');
+      setSyncError(null);
+      setAuthError(null);
+      await signInWithRedirect(auth, googleProvider);
+    } catch (err: any) {
+      setSyncState('offline_local');
+      const classified = classifyAuthError(err);
+      if (classified) {
+        setAuthError(classified);
+        showToast(classified.message);
+      }
+    }
+  };
+
   const handleSignInGoogle = async () => {
     try {
       setSyncState('connecting');
       setSyncError(null);
+      setAuthError(null);
       await signInWithPopup(auth, googleProvider);
       showToast('Connexion Google réussie · Synchronisation cloud active.');
     } catch (err: any) {
+      const code = String(err?.code || '');
+      if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch (redirectErr: any) {
+          setSyncState('offline_local');
+          const classifiedRedirect = classifyAuthError(redirectErr);
+          if (classifiedRedirect) {
+            setAuthError(classifiedRedirect);
+            showToast(classifiedRedirect.message);
+          }
+          return;
+        }
+      }
       setSyncState('offline_local');
-      if (err?.code !== 'auth/popup-closed-by-user') {
-        showToast(`Connexion annulée ou impossible : ${err?.message || 'Erreur Google Auth'}`);
+      const classified = classifyAuthError(err);
+      if (classified) {
+        setAuthError(classified);
+        showToast(classified.message);
       }
     }
   };
@@ -341,6 +473,7 @@ export const App: React.FC = () => {
   const handleSignOutGoogle = async () => {
     try {
       await signOut(auth);
+      setAuthError(null);
       showToast('Déconnecté · Mode stockage local actif.');
     } catch (err: any) {
       showToast(`Erreur lors de la déconnexion : ${err?.message || 'Erreur'}`);
@@ -380,7 +513,7 @@ export const App: React.FC = () => {
   ) => {
     setIsTestingAll(true);
     try {
-      const providers: AIProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
+      const providers: AIProvider[] = ['gemini', 'groq', 'cerebras', 'mistral', 'openrouter', 'local'];
       await Promise.all(
         providers.map(p => {
           const override = p === 'local' ? undefined : draftKeys?.[p];
@@ -396,7 +529,7 @@ export const App: React.FC = () => {
   const refreshHealthStatusesAfterKeyUpdate = () => {
     setHealthMap(prev => {
       const next = { ...prev };
-      const cloudProviders: CloudAIProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter'];
+      const cloudProviders: CloudAIProvider[] = ['gemini', 'groq', 'cerebras', 'mistral', 'openrouter'];
       for (const p of cloudProviders) {
         if (!hasKeyForProvider(p)) {
           next[p] = {
@@ -619,10 +752,10 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
-      <div className="relative min-h-screen bg-[#04060C] text-slate-100 flex flex-col font-sans pb-20 sm:pb-8">
-        <CosmicBackdrop />
+      <div className="relative min-h-screen bg-[#04060C] text-slate-100 flex flex-col font-sans pb-20 md:pb-8 overflow-x-clip">
+        <CosmicBackdrop focusMode={focusMode} />
 
-        <div className="relative z-10 flex flex-col min-h-screen">
+        <div className="relative z-10 flex flex-col min-h-screen min-w-0">
           <Header
             currentTab={currentTab}
             onTabChange={setCurrentTab}
@@ -642,21 +775,30 @@ export const App: React.FC = () => {
             authReady={authReady}
             syncState={syncState}
             syncError={syncError}
+            authError={authError}
+            onDismissAuthError={() => setAuthError(null)}
+            onRetryRedirectSignIn={handleRetryRedirectSignIn}
             onSignIn={handleSignInGoogle}
             onSignOut={handleSignOutGoogle}
+            focusMode={focusMode}
+            onToggleFocusMode={handleToggleFocusMode}
           />
 
           {toastMessage && (
             <div
               role="status"
-              className="fixed top-20 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A0E19]/95 border border-amber-400/40 text-amber-200 text-xs font-semibold shadow-2xl backdrop-blur-md animate-fade-in"
+              className="fixed top-20 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#0A0E19]/98 border border-amber-400/40 text-amber-200 text-xs font-semibold shadow-2xl animate-fade-in"
             >
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>{toastMessage}</span>
             </div>
           )}
 
-          <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 space-y-6">
+          <main
+            className={`flex-1 max-w-[1400px] w-full mx-auto px-3 sm:px-5 lg:px-6 py-5 sm:py-6 space-y-6 min-w-0 ${
+              focusMode ? 'latex-focus' : ''
+            }`}
+          >
             {/* Observatoire Système Solaire + Tableau de Bord IA */}
             <SolarSystemNav
               currentTab={currentTab}
@@ -676,6 +818,7 @@ export const App: React.FC = () => {
               onTestProvider={p => handleTestProvider(p)}
               onTestAllProviders={() => handleTestAllProviders()}
               isTestingAll={isTestingAll}
+              focusMode={focusMode}
             />
 
             {/* 1. SECTION FICHES DE COURS */}
@@ -690,7 +833,7 @@ export const App: React.FC = () => {
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
                     {/* Sidebar Fiches */}
-                    <aside className="lg:col-span-4 space-y-3">
+                    <aside className="lg:col-span-4 space-y-3 min-w-0">
                       <div className="bg-[#0A0E19]/90 border border-white/[0.08] rounded-2xl p-4 space-y-3">
                         <div className="flex items-center justify-between gap-2">
                           <h2 className="font-display text-sm font-semibold text-slate-100 flex items-center gap-2">
@@ -795,7 +938,7 @@ export const App: React.FC = () => {
                     </aside>
 
                     {/* Visualiseur de la fiche active */}
-                    <div className="lg:col-span-8">
+                    <div className="lg:col-span-8 min-w-0">
                       {resolvedActiveSheet ? (
                         <SheetViewer
                           sheet={resolvedActiveSheet}
@@ -962,14 +1105,17 @@ export const App: React.FC = () => {
           />
         )}
 
-        <IngestionModal
-          isOpen={isIngestionOpen}
-          onClose={() => setIsIngestionOpen(false)}
-          defaultSubjectId={selectedSubjectId}
-          onSheetCreated={handleSheetIngested}
-          onTdCreated={handleTdIngested}
-          onAnnalesCreated={handleAnnalesIngested}
-        />
+        {isIngestionOpen && (
+          <IngestionModal
+            isOpen={isIngestionOpen}
+            onClose={() => setIsIngestionOpen(false)}
+            defaultSubjectId={selectedSubjectId}
+            defaultTargetType={currentTab}
+            onSheetCreated={handleSheetIngested}
+            onTdCreated={handleTdIngested}
+            onAnnalesCreated={handleAnnalesIngested}
+          />
+        )}
 
         <OfflineIndicator />
 

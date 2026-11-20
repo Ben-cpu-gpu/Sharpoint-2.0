@@ -37,7 +37,7 @@ export const DebugDrawer: React.FC = () => {
         type="button"
         onClick={() => setIsOpen(true)}
         aria-label="Ouvrir la console d'inspection IA"
-        className="hidden sm:flex fixed bottom-4 right-4 z-40 items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0A0E19]/95 hover:bg-[#101625] text-slate-200 text-xs font-semibold shadow-xl border border-white/[0.1] backdrop-blur-md transition-colors"
+        className="hidden sm:flex fixed bottom-4 right-4 z-40 items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0A0E19]/95 hover:bg-[#101625] text-slate-200 text-xs font-semibold shadow-xl border border-white/[0.1] transition-colors"
       >
         <Terminal className="w-3.5 h-3.5 text-amber-400" />
         <span>Logs IA</span>
@@ -53,7 +53,7 @@ export const DebugDrawer: React.FC = () => {
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/80 animate-fade-in">
           <div
             role="dialog"
             aria-modal="true"
@@ -67,10 +67,10 @@ export const DebugDrawer: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-display text-sm font-bold text-slate-100">
-                    Console d'Inspection & Résilience IA
+                    Console d'Inspection &amp; Résilience IA
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Traçabilité des appels Gemini, Claude, ChatGPT, Groq, OpenRouter et Mode Local
+                    Traçabilité des appels Gemini, Groq, Cerebras, Mistral, OpenRouter et Mode Local
                   </p>
                 </div>
               </div>
@@ -122,7 +122,7 @@ export const DebugDrawer: React.FC = () => {
                   <Terminal className="w-8 h-8 mb-2 opacity-40 text-slate-400" />
                   <p className="font-sans text-sm text-slate-300">Aucun événement API enregistré.</p>
                   <p className="font-sans text-xs text-slate-500 mt-1">
-                    Les requêtes vers Gemini, Claude, OpenAI ou Mode Local apparaîtront ici.
+                    Les requêtes vers Gemini, Groq, Cerebras, Mistral, OpenRouter ou Mode Local apparaîtront ici.
                   </p>
                 </div>
               ) : (
@@ -212,8 +212,8 @@ export const DebugDrawer: React.FC = () => {
             </div>
 
             <div className="p-3.5 bg-[#0A0E19] border-t border-white/[0.08] text-xs text-slate-400 flex items-center justify-between gap-3">
-              <span>Priorité : 1. Gemini → 2. Claude → 3. ChatGPT → 4. Mode Local</span>
-              <span className="font-mono text-slate-500 shrink-0">Client-Side</span>
+              <span>Priorité : 1. Gemini → Groq → Cerebras → Mistral → OpenRouter → Local</span>
+              <span className="font-mono text-slate-500 shrink-0">Hybride</span>
             </div>
           </div>
         </div>

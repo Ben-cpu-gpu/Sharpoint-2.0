@@ -18,7 +18,7 @@ const SUBJECTS = [
   'empreinte-carbone',
   'langues',
 ];
-const PROVIDERS = ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
+const PROVIDERS = ['gemini', 'groq', 'cerebras', 'mistral', 'openrouter', 'local'];
 
 test('computes exact node counts across all 3 solar rings', () => {
   const layout = computeSolarSystemLayout(CATEGORIES, SUBJECTS, PROVIDERS);

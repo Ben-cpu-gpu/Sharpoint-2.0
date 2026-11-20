@@ -57,26 +57,26 @@ service cloud.firestore {
     }
 
     function isValidProvider(p) {
-      return p is string && p in ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
+      return p is string && p in ['gemini', 'groq', 'cerebras', 'mistral', 'openrouter', 'local'];
     }
 
     function isValidUserSettings(data, userId) {
       return data.keys().hasAll([
           'ownerId', 'selectedModel', 'selectedProvider',
-          'claudeKey', 'openaiKey', 'groqKey', 'openrouterKey',
+          'groqKey', 'cerebrasKey', 'mistralKey', 'openrouterKey',
           'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
           'ownerId', 'selectedModel', 'selectedProvider',
-          'claudeKey', 'openaiKey', 'groqKey', 'openrouterKey',
+          'groqKey', 'cerebrasKey', 'mistralKey', 'openrouterKey',
           'createdAt', 'updatedAt'
         ]) &&
         data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId == userId &&
         data.selectedModel is string && data.selectedModel.size() >= 1 && data.selectedModel.size() <= 120 &&
         isValidProvider(data.selectedProvider) &&
-        data.claudeKey is string && data.claudeKey.size() <= 512 &&
-        data.openaiKey is string && data.openaiKey.size() <= 512 &&
         data.groqKey is string && data.groqKey.size() <= 512 &&
+        data.cerebrasKey is string && data.cerebrasKey.size() <= 512 &&
+        data.mistralKey is string && data.mistralKey.size() <= 512 &&
         data.openrouterKey is string && data.openrouterKey.size() <= 512 &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -219,7 +219,8 @@ service cloud.firestore {
           hasActiveUserRoot(userId) &&
           incoming().diff(existing()).affectedKeys().hasOnly([
             'selectedModel', 'selectedProvider',
-            'claudeKey', 'openaiKey', 'groqKey', 'openrouterKey',
+            'groqKey', 'cerebrasKey', 'mistralKey', 'openrouterKey',
+            'claudeKey', 'openaiKey',
             'updatedAt'
           ]);
 

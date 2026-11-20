@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
+define(['./workbox-43e44e5a'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -78,13 +78,16 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "index.html",
-    "revision": "0.boraajp6sho"
+    "revision": "0.es1sv80ccg"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html"), {
     allowlist: [/^\/$/],
     denylist: [/^\/api\//]
   }));
+  workbox.registerRoute(({
+    url
+  }) => url.pathname.startsWith("/api/"), new workbox.NetworkOnly(), 'GET');
   workbox.registerRoute(/^https:\/\/fonts\.googleapis\.com\/.*/i, new workbox.CacheFirst({
     "cacheName": "google-fonts-cache",
     plugins: [new workbox.ExpirationPlugin({
@@ -103,10 +106,10 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
       statuses: [0, 200]
     })]
   }), 'GET');
-  workbox.registerRoute(/^https:\/\/cdn\.jsdelivr\.net\/npm\/katex.*/i, new workbox.CacheFirst({
-    "cacheName": "katex-cdn-cache",
+  workbox.registerRoute(/^https:\/\/cdn\.jsdelivr\.net\/npm\/(katex|pdfjs-dist).*/i, new workbox.CacheFirst({
+    "cacheName": "scientific-cdn-cache",
     plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 20,
+      maxEntries: 30,
       maxAgeSeconds: 7776000
     }), new workbox.CacheableResponsePlugin({
       statuses: [0, 200]

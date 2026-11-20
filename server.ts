@@ -79,6 +79,26 @@ function parseUpstreamError(err: unknown): ParsedUpstreamError {
   };
 }
 
+const SERVER_GEMINI_FALLBACK_ORDER = [
+  'gemini-4-hydrogen',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+] as const;
+
+function resolveServerGeminiModels(requested: unknown, allowCascade: boolean): string[] {
+  const primary = resolveServerGeminiModel(requested);
+  if (!allowCascade) {
+    return [primary];
+  }
+  const chain: string[] = [primary];
+  for (const fallback of SERVER_GEMINI_FALLBACK_ORDER) {
+    if (!chain.includes(fallback)) {
+      chain.push(fallback);
+    }
+  }
+  return chain;
+}
+
 async function generateWithRetry(
   ai: GoogleGenAI,
   model: string,
@@ -121,13 +141,14 @@ async function startServer() {
 
   app.post('/api/gemini/generate', async (req: Request, res: Response) => {
     const ai = getGeminiClient();
-    const model = resolveServerGeminiModel(req.body?.model);
+    const allowCascade = req.body?.cascadeModels !== false;
+    const candidateModels = resolveServerGeminiModels(req.body?.model, allowCascade);
 
     if (!ai) {
       res.status(503).json({
         error: 'Clé GEMINI_API_KEY non configurée côté serveur. Vérifiez Settings > Secrets.',
         statusCode: 503,
-        model,
+        model: candidateModels[0],
         rawPayload: 'MISSING_SERVER_GEMINI_API_KEY',
       });
       return;
@@ -138,7 +159,7 @@ async function startServer() {
       res.status(400).json({
         error: 'Le champ userPrompt est requis.',
         statusCode: 400,
-        model,
+        model: candidateModels[0],
       });
       return;
     }
@@ -154,38 +175,54 @@ async function startServer() {
       config.systemInstruction = req.body.systemPrompt.trim();
     }
 
-    try {
-      const response = await generateWithRetry(ai, model, userPrompt, config, 1);
-      const text = response.text;
-      if (!text) {
-        res.status(502).json({
-          error: 'Réponse Gemini vide ou filtrée.',
+    let lastFailure: ParsedUpstreamError = {
+      statusCode: 502,
+      message: 'Réponse Gemini vide ou filtrée.',
+      rawPayload: '',
+    };
+    let lastFailedModel = candidateModels[0];
+
+    for (const model of candidateModels) {
+      lastFailedModel = model;
+      try {
+        const response = await generateWithRetry(ai, model, userPrompt, config, 1);
+        const text = response.text;
+        if (text && text.trim()) {
+          res.json({ text, model });
+          return;
+        }
+        lastFailure = {
           statusCode: 502,
-          model,
-        });
-        return;
+          message: `Réponse Gemini vide sur ${model}.`,
+          rawPayload: 'EMPTY_RESPONSE',
+        };
+      } catch (err) {
+        lastFailure = parseUpstreamError(err);
+        if (lastFailure.statusCode === 401 || lastFailure.statusCode === 403) {
+          break;
+        }
       }
-      res.json({ text, model });
-    } catch (err) {
-      const parsed = parseUpstreamError(err);
-      res.status(parsed.statusCode).json({
-        error: parsed.message,
-        statusCode: parsed.statusCode,
-        model,
-        rawPayload: parsed.rawPayload,
-      });
     }
+
+    res.status(lastFailure.statusCode).json({
+      error: lastFailure.message,
+      statusCode: lastFailure.statusCode,
+      model: lastFailedModel,
+      rawPayload: lastFailure.rawPayload,
+    });
   });
 
   app.post('/api/gemini/stream', async (req: Request, res: Response) => {
     const ai = getGeminiClient();
-    const model = resolveServerGeminiModel(req.body?.model);
+    const allowCascade = req.body?.cascadeModels !== false;
+    const candidateModels = resolveServerGeminiModels(req.body?.model, allowCascade);
 
     if (!ai) {
       res.status(503).json({
         error: 'Clé GEMINI_API_KEY non configurée côté serveur. Vérifiez Settings > Secrets.',
         statusCode: 503,
-        model,
+        model: candidateModels[0],
+        rawPayload: 'MISSING_SERVER_GEMINI_API_KEY',
       });
       return;
     }
@@ -195,7 +232,7 @@ async function startServer() {
       res.status(400).json({
         error: 'Le champ userPrompt est requis.',
         statusCode: 400,
-        model,
+        model: candidateModels[0],
       });
       return;
     }
@@ -204,31 +241,67 @@ async function startServer() {
     if (typeof req.body?.systemPrompt === 'string' && req.body.systemPrompt.trim()) {
       config.systemInstruction = req.body.systemPrompt.trim();
     }
+    if (typeof req.body?.responseMimeType === 'string' && req.body.responseMimeType.trim()) {
+      config.responseMimeType = req.body.responseMimeType.trim();
+    }
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    try {
-      const stream = await ai.models.generateContentStream({
-        model,
-        contents: userPrompt,
-        config,
-      });
+    let lastFailure: ParsedUpstreamError = {
+      statusCode: 502,
+      message: 'Réponse stream Gemini vide.',
+      rawPayload: '',
+    };
+    let lastFailedModel = candidateModels[0];
 
-      for await (const chunk of stream) {
-        const chunkText = chunk.text || '';
-        if (chunkText) {
-          res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
+    for (const model of candidateModels) {
+      lastFailedModel = model;
+      let streamedAnyText = false;
+      try {
+        res.write(`data: ${JSON.stringify({ stage: 'model', model })}\n\n`);
+        const stream = await ai.models.generateContentStream({
+          model,
+          contents: userPrompt,
+          config,
+        });
+
+        for await (const chunk of stream) {
+          const chunkText = chunk.text || '';
+          if (chunkText) {
+            streamedAnyText = true;
+            res.write(`data: ${JSON.stringify({ text: chunkText, model })}\n\n`);
+          }
+        }
+
+        if (streamedAnyText) {
+          res.write(`data: ${JSON.stringify({ done: true, model })}\n\n`);
+          res.end();
+          return;
+        }
+        lastFailure = {
+          statusCode: 502,
+          message: `Réponse stream Gemini vide sur ${model}.`,
+          rawPayload: 'EMPTY_STREAM',
+        };
+      } catch (err) {
+        lastFailure = parseUpstreamError(err);
+        if (streamedAnyText || lastFailure.statusCode === 401 || lastFailure.statusCode === 403) {
+          break;
         }
       }
-      res.write(`data: ${JSON.stringify({ done: true, model })}\n\n`);
-      res.end();
-    } catch (err) {
-      const parsed = parseUpstreamError(err);
-      res.write(`data: ${JSON.stringify({ error: parsed.message, statusCode: parsed.statusCode, model })}\n\n`);
-      res.end();
     }
+
+    res.write(
+      `data: ${JSON.stringify({
+        error: lastFailure.message,
+        statusCode: lastFailure.statusCode,
+        model: lastFailedModel,
+        rawPayload: lastFailure.rawPayload,
+      })}\n\n`
+    );
+    res.end();
   });
 
   app.post('/api/gemini/health', async (req: Request, res: Response) => {
@@ -289,6 +362,14 @@ async function startServer() {
         rawPayload: parsed.rawPayload,
       });
     }
+  });
+
+  // Garantit que toute route /api/* inconnue renvoie du JSON et jamais le shell HTML SPA
+  app.use('/api', (req: Request, res: Response) => {
+    res.status(404).json({
+      error: `Route API introuvable : ${req.originalUrl}`,
+      statusCode: 404,
+    });
   });
 
   if (process.env.NODE_ENV !== 'production') {
