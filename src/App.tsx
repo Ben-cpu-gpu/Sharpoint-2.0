@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { CosmicBackdrop } from './components/common/CosmicBackdrop';
 import { Header, MainTab } from './components/common/Header';
@@ -7,6 +8,8 @@ import { ApiKeyModal } from './components/common/ApiKeyModal';
 import { DebugDrawer } from './components/common/DebugDrawer';
 import { IngestionModal } from './components/common/IngestionModal';
 import { SolarSystemNav } from './components/common/SolarSystemNav';
+import { OfflineIndicator } from './components/common/OfflineIndicator';
+import { CloudSyncState } from './components/common/CloudSyncControl';
 import { SheetViewer } from './components/sheets/SheetViewer';
 import { SheetEditor } from './components/sheets/SheetEditor';
 import { RevisionModal } from './components/sheets/RevisionModal';
@@ -18,6 +21,7 @@ import {
   resolveActiveSheet,
   resolveSubjectId,
 } from './utils/courseCatalog';
+import { mergeLocalAndCloudById, UserRelaySettings } from './utils/cloudSyncHelpers';
 import {
   loadInitialData,
   saveAppData,
@@ -26,11 +30,34 @@ import {
 } from './services/storageService';
 import {
   AIProvider,
+  getAnthropicApiKey,
+  getGroqApiKey,
+  getOpenAIApiKey,
+  getOpenRouterApiKey,
+  getSelectedModel,
   getSelectedProvider,
   hasKeyForProvider,
+  setAnthropicApiKey,
+  setGroqApiKey,
+  setOpenAIApiKey,
+  setOpenRouterApiKey,
+  setSelectedModel,
 } from './services/apiKeyService';
 import { fetchGeminiServerStatus, testProviderHealth } from './services/aiService';
 import { CloudAIProvider } from './utils/aiFallbackOrder';
+import { auth, googleProvider } from './firebase';
+import {
+  deleteAnnaleInCloud,
+  deleteStudySheetInCloud,
+  deleteTDExerciseInCloud,
+  ensureUserRoot,
+  saveUserSettingsInCloud,
+  subscribeToUserCloudData,
+  uploadMissingLocalItemsToCloud,
+  upsertAnnaleInCloud,
+  upsertStudySheetInCloud,
+  upsertTDExerciseInCloud,
+} from './services/cloudSyncService';
 import {
   BookOpen,
   Plus,
@@ -61,6 +88,16 @@ export const App: React.FC = () => {
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [apiModalInitialTab, setApiModalInitialTab] = useState<AIProvider | undefined>(undefined);
   const [isTestingAll, setIsTestingAll] = useState(false);
+
+  const [cloudUser, setCloudUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [syncState, setSyncState] = useState<CloudSyncState>('offline_local');
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [fatalFirestoreError, setFatalFirestoreError] = useState<Error | null>(null);
+
+  const latestLocalDataRef = useRef({ sheets, tdExercises, annales });
+  latestLocalDataRef.current = { sheets, tdExercises, annales };
+  const migratedUidsRef = useRef<Set<string>>(new Set());
 
   const buildInitialHealthMap = (): Record<AIProvider, ProviderHealthResult> => {
     const providers: AIProvider[] = ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
@@ -134,6 +171,182 @@ export const App: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  if (fatalFirestoreError) {
+    throw fatalFirestoreError;
+  }
+
+  const getCurrentLocalRelaySettings = (): UserRelaySettings => ({
+    selectedModel: getSelectedModel(),
+    selectedProvider: getSelectedProvider(),
+    claudeKey: getAnthropicApiKey(),
+    openaiKey: getOpenAIApiKey(),
+    groqKey: getGroqApiKey(),
+    openrouterKey: getOpenRouterApiKey(),
+  });
+
+  useEffect(() => {
+    let activeUnsub: (() => void) | null = null;
+    let cancelled = false;
+
+    const unsubAuth = onAuthStateChanged(auth, async user => {
+      if (activeUnsub) {
+        activeUnsub();
+        activeUnsub = null;
+      }
+
+      if (cancelled) return;
+
+      if (!user) {
+        setCloudUser(null);
+        setAuthReady(true);
+        setSyncState('offline_local');
+        setSyncError(null);
+        return;
+      }
+
+      setCloudUser(user);
+      setAuthReady(true);
+      setSyncState('connecting');
+      setSyncError(null);
+
+      try {
+        await ensureUserRoot(user);
+        if (cancelled) return;
+
+        const loaded = {
+          sheets: false,
+          td: false,
+          annales: false,
+          settings: false,
+          cloudSheets: [] as StudySheet[],
+          cloudTd: [] as TDExercise[],
+          cloudAnnales: [] as AnnaleItem[],
+          cloudSettingsExists: false,
+        };
+
+        const maybeRunInitialMigration = async () => {
+          if (
+            migratedUidsRef.current.has(user.uid) ||
+            !loaded.sheets ||
+            !loaded.td ||
+            !loaded.annales ||
+            !loaded.settings
+          ) {
+            return;
+          }
+          migratedUidsRef.current.add(user.uid);
+          const localSnap = latestLocalDataRef.current;
+          const sheetMerge = mergeLocalAndCloudById(localSnap.sheets, loaded.cloudSheets);
+          const tdMerge = mergeLocalAndCloudById(localSnap.tdExercises, loaded.cloudTd);
+          const annaleMerge = mergeLocalAndCloudById(localSnap.annales, loaded.cloudAnnales);
+
+          if (
+            sheetMerge.missingInCloud.length > 0 ||
+            tdMerge.missingInCloud.length > 0 ||
+            annaleMerge.missingInCloud.length > 0
+          ) {
+            setSyncState('syncing');
+            await uploadMissingLocalItemsToCloud(user.uid, {
+              sheets: sheetMerge.missingInCloud,
+              tdExercises: tdMerge.missingInCloud,
+              annales: annaleMerge.missingInCloud,
+            });
+          }
+
+          if (!loaded.cloudSettingsExists) {
+            await saveUserSettingsInCloud(user.uid, getCurrentLocalRelaySettings());
+          }
+          setSyncState('synced');
+        };
+
+        activeUnsub = subscribeToUserCloudData(user.uid, {
+          onSheets: cloudSheets => {
+            loaded.sheets = true;
+            loaded.cloudSheets = cloudSheets;
+            setSheets(cloudSheets);
+            saveAppData(cloudSheets, latestLocalDataRef.current.tdExercises, latestLocalDataRef.current.annales);
+            setActiveSheetId(prev => (prev && cloudSheets.some(s => s.id === prev) ? prev : cloudSheets[0]?.id || ''));
+            void maybeRunInitialMigration();
+            setSyncState('synced');
+          },
+          onTdExercises: cloudTd => {
+            loaded.td = true;
+            loaded.cloudTd = cloudTd;
+            setTdExercises(cloudTd);
+            saveAppData(latestLocalDataRef.current.sheets, cloudTd, latestLocalDataRef.current.annales);
+            void maybeRunInitialMigration();
+            setSyncState('synced');
+          },
+          onAnnales: cloudAnnales => {
+            loaded.annales = true;
+            loaded.cloudAnnales = cloudAnnales;
+            setAnnales(cloudAnnales);
+            saveAppData(latestLocalDataRef.current.sheets, latestLocalDataRef.current.tdExercises, cloudAnnales);
+            void maybeRunInitialMigration();
+            setSyncState('synced');
+          },
+          onSettings: (cloudSettings, exists) => {
+            loaded.settings = true;
+            loaded.cloudSettingsExists = exists;
+            if (exists && cloudSettings) {
+              setAnthropicApiKey(cloudSettings.claudeKey);
+              setOpenAIApiKey(cloudSettings.openaiKey);
+              setGroqApiKey(cloudSettings.groqKey);
+              setOpenRouterApiKey(cloudSettings.openrouterKey);
+              setSelectedModel(cloudSettings.selectedModel);
+              refreshHealthStatusesAfterKeyUpdate();
+            }
+            void maybeRunInitialMigration();
+            setSyncState('synced');
+          },
+          onSyncError: err => {
+            setSyncState('error');
+            setSyncError(err.message);
+            if (err.message.includes('Missing or insufficient permissions') || err.message.includes('PERMISSION_DENIED')) {
+              setFatalFirestoreError(err);
+            }
+          },
+        });
+      } catch (err) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        setSyncState('error');
+        setSyncError(errorObj.message);
+        if (errorObj.message.includes('Missing or insufficient permissions')) {
+          setFatalFirestoreError(errorObj);
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      unsubAuth();
+      if (activeUnsub) activeUnsub();
+    };
+  }, []);
+
+  const handleSignInGoogle = async () => {
+    try {
+      setSyncState('connecting');
+      setSyncError(null);
+      await signInWithPopup(auth, googleProvider);
+      showToast('Connexion Google réussie · Synchronisation cloud active.');
+    } catch (err: any) {
+      setSyncState('offline_local');
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        showToast(`Connexion annulée ou impossible : ${err?.message || 'Erreur Google Auth'}`);
+      }
+    }
+  };
+
+  const handleSignOutGoogle = async () => {
+    try {
+      await signOut(auth);
+      showToast('Déconnecté · Mode stockage local actif.');
+    } catch (err: any) {
+      showToast(`Erreur lors de la déconnexion : ${err?.message || 'Erreur'}`);
+    }
+  };
+
   const handleOpenDashboard = (providerTab?: AIProvider) => {
     setApiModalInitialTab(providerTab);
     setIsApiKeyModalOpen(true);
@@ -203,10 +416,38 @@ export const App: React.FC = () => {
     });
   };
 
+  const runCloudTask = (task: Promise<unknown>) => {
+    setSyncState('syncing');
+    task
+      .then(() => {
+        setSyncState('synced');
+      })
+      .catch(err => {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        setSyncState('error');
+        setSyncError(errorObj.message);
+        if (errorObj.message.includes('Missing or insufficient permissions')) {
+          setFatalFirestoreError(errorObj);
+        }
+      });
+  };
+
   const handleManualSave = () => {
     const timestamp = saveAppData(sheets, tdExercises, annales);
     setLastSavedTime(timestamp);
-    showToast(`Données sauvegardées à ${timestamp}`);
+    if (cloudUser) {
+      runCloudTask(
+        Promise.all([
+          ...sheets.map(s => upsertStudySheetInCloud(cloudUser.uid, s)),
+          ...tdExercises.map(t => upsertTDExerciseInCloud(cloudUser.uid, t)),
+          ...annales.map(a => upsertAnnaleInCloud(cloudUser.uid, a)),
+          saveUserSettingsInCloud(cloudUser.uid, getCurrentLocalRelaySettings()),
+        ])
+      );
+      showToast(`Données sauvegardées & synchronisées (${timestamp})`);
+    } else {
+      showToast(`Données sauvegardées à ${timestamp}`);
+    }
   };
 
   const handleExportJson = () => {
@@ -225,6 +466,15 @@ export const App: React.FC = () => {
       }
       const timestamp = saveAppData(imported.sheets, imported.tdExercises, imported.annales);
       setLastSavedTime(timestamp);
+      if (cloudUser) {
+        runCloudTask(
+          Promise.all([
+            ...imported.sheets.map(s => upsertStudySheetInCloud(cloudUser.uid, s)),
+            ...imported.tdExercises.map(t => upsertTDExerciseInCloud(cloudUser.uid, t)),
+            ...imported.annales.map(a => upsertAnnaleInCloud(cloudUser.uid, a)),
+          ])
+        );
+      }
       showToast('Sauvegarde JSON importée avec succès.');
     } catch (err: any) {
       showToast(`Erreur d'import : ${err?.message || 'Fichier invalide'}`);
@@ -237,6 +487,9 @@ export const App: React.FC = () => {
     const next = sheets.map(s => (s.id === updated.id ? updated : s));
     setSheets(next);
     saveAppData(next, tdExercises, annales);
+    if (cloudUser) {
+      runCloudTask(upsertStudySheetInCloud(cloudUser.uid, updated));
+    }
   };
 
   const handleSaveEditor = (updated: StudySheet) => {
@@ -253,6 +506,9 @@ export const App: React.FC = () => {
       setActiveSheetId(next[0]?.id || '');
     }
     saveAppData(next, tdExercises, annales);
+    if (cloudUser) {
+      runCloudTask(deleteStudySheetInCloud(cloudUser.uid, id));
+    }
     showToast('Fiche supprimée.');
   };
 
@@ -282,6 +538,9 @@ export const App: React.FC = () => {
     setActiveSheetId(newSheet.id);
     setIsEditingSheet(true);
     saveAppData(next, tdExercises, annales);
+    if (cloudUser) {
+      runCloudTask(upsertStudySheetInCloud(cloudUser.uid, newSheet));
+    }
   };
 
   const handleSheetIngested = (newSheet: StudySheet) => {
@@ -290,6 +549,9 @@ export const App: React.FC = () => {
     setActiveSheetId(newSheet.id);
     setCurrentTab('sheets');
     saveAppData(next, tdExercises, annales);
+    if (cloudUser) {
+      runCloudTask(upsertStudySheetInCloud(cloudUser.uid, newSheet));
+    }
     showToast('Fiche de révision générée et ajoutée.');
   };
 
@@ -298,6 +560,9 @@ export const App: React.FC = () => {
     setTdExercises(next);
     setCurrentTab('td');
     saveAppData(sheets, next, annales);
+    if (cloudUser) {
+      runCloudTask(Promise.all(newExercises.map(ex => upsertTDExerciseInCloud(cloudUser.uid, ex))));
+    }
     showToast(`${newExercises.length} exercice(s) de TD extrait(s).`);
   };
 
@@ -306,6 +571,9 @@ export const App: React.FC = () => {
     setAnnales(next);
     setCurrentTab('annales');
     saveAppData(sheets, tdExercises, next);
+    if (cloudUser) {
+      runCloudTask(Promise.all(newAnnales.map(an => upsertAnnaleInCloud(cloudUser.uid, an))));
+    }
     showToast(`${newAnnales.length} annale(s) d'examen extraite(s).`);
   };
 
@@ -370,6 +638,12 @@ export const App: React.FC = () => {
               td: tdExercises.length,
               annales: annales.length,
             }}
+            cloudUser={cloudUser}
+            authReady={authReady}
+            syncState={syncState}
+            syncError={syncError}
+            onSignIn={handleSignInGoogle}
+            onSignOut={handleSignOutGoogle}
           />
 
           {toastMessage && (
@@ -584,17 +858,26 @@ export const App: React.FC = () => {
                   const next = tdExercises.map(e => (e.id === updated.id ? updated : e));
                   setTdExercises(next);
                   saveAppData(sheets, next, annales);
+                  if (cloudUser) {
+                    runCloudTask(upsertTDExerciseInCloud(cloudUser.uid, updated));
+                  }
                 }}
                 onAddExercise={newExo => {
                   const next = [newExo, ...tdExercises];
                   setTdExercises(next);
                   saveAppData(sheets, next, annales);
+                  if (cloudUser) {
+                    runCloudTask(upsertTDExerciseInCloud(cloudUser.uid, newExo));
+                  }
                   showToast('Nouvel exercice ajouté au TD.');
                 }}
                 onDeleteExercise={id => {
                   const next = tdExercises.filter(e => e.id !== id);
                   setTdExercises(next);
                   saveAppData(sheets, next, annales);
+                  if (cloudUser) {
+                    runCloudTask(deleteTDExerciseInCloud(cloudUser.uid, id));
+                  }
                   showToast('Exercice supprimé.');
                 }}
               />
@@ -609,17 +892,26 @@ export const App: React.FC = () => {
                   const next = annales.map(a => (a.id === updated.id ? updated : a));
                   setAnnales(next);
                   saveAppData(sheets, tdExercises, next);
+                  if (cloudUser) {
+                    runCloudTask(upsertAnnaleInCloud(cloudUser.uid, updated));
+                  }
                 }}
                 onAddAnnale={newAnnale => {
                   const next = [newAnnale, ...annales];
                   setAnnales(next);
                   saveAppData(sheets, tdExercises, next);
+                  if (cloudUser) {
+                    runCloudTask(upsertAnnaleInCloud(cloudUser.uid, newAnnale));
+                  }
                   showToast('Nouvelle annale générée.');
                 }}
                 onDeleteAnnale={id => {
                   const next = annales.filter(a => a.id !== id);
                   setAnnales(next);
                   saveAppData(sheets, tdExercises, next);
+                  if (cloudUser) {
+                    runCloudTask(deleteAnnaleInCloud(cloudUser.uid, id));
+                  }
                   showToast('Annale supprimée.');
                 }}
               />
@@ -645,7 +937,12 @@ export const App: React.FC = () => {
           onClose={() => setIsApiKeyModalOpen(false)}
           onKeysUpdated={() => {
             refreshHealthStatusesAfterKeyUpdate();
-            showToast('Paramètres et clés API mis à jour.');
+            if (cloudUser) {
+              runCloudTask(saveUserSettingsInCloud(cloudUser.uid, getCurrentLocalRelaySettings()));
+              showToast('Paramètres et clés API synchronisés dans le cloud.');
+            } else {
+              showToast('Paramètres et clés API mis à jour.');
+            }
           }}
           healthMap={healthMap}
           onTestProvider={handleTestProvider}
@@ -673,6 +970,8 @@ export const App: React.FC = () => {
           onTdCreated={handleTdIngested}
           onAnnalesCreated={handleAnnalesIngested}
         />
+
+        <OfflineIndicator />
 
         <DebugDrawer />
       </div>

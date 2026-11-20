@@ -13,6 +13,9 @@ import {
 import { getSelectedModel, ALL_MODELS, hasActiveKeyForCurrentModel, getSelectedProvider } from '../../services/apiKeyService';
 
 import { ProviderHealthState } from '../../types/course';
+import { PWAInstallButton } from './PWAInstallButton';
+import { CloudSyncControl, CloudSyncState } from './CloudSyncControl';
+import { User } from 'firebase/auth';
 
 export type MainTab = 'sheets' | 'td' | 'annales';
 
@@ -31,6 +34,12 @@ interface HeaderProps {
     td: number;
     annales: number;
   };
+  cloudUser: User | null;
+  authReady: boolean;
+  syncState: CloudSyncState;
+  syncError: string | null;
+  onSignIn: () => Promise<void>;
+  onSignOut: () => Promise<void>;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -44,6 +53,12 @@ export const Header: React.FC<HeaderProps> = ({
   onImportJson,
   activeHealthStatus,
   counts,
+  cloudUser,
+  authReady,
+  syncState,
+  syncError,
+  onSignIn,
+  onSignOut,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentModelId = getSelectedModel();
@@ -183,10 +198,21 @@ export const Header: React.FC<HeaderProps> = ({
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-white/[0.1] text-xs font-medium text-slate-300 hover:text-white transition-colors whitespace-nowrap shrink-0"
           >
             <Save className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden lg:inline font-mono text-[11px]">
+            <span className="hidden xl:inline font-mono text-[11px]">
               {lastSavedTime ? lastSavedTime : 'Sauver'}
             </span>
           </button>
+
+          <PWAInstallButton />
+
+          <CloudSyncControl
+            user={cloudUser}
+            authReady={authReady}
+            syncState={syncState}
+            syncError={syncError}
+            onSignIn={onSignIn}
+            onSignOut={onSignOut}
+          />
 
           <div className="hidden md:flex items-center gap-1">
             <button

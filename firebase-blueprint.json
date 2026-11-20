@@ -1,0 +1,422 @@
+{
+  "entities": {
+    "UserRoot": {
+      "title": "UserRoot",
+      "description": "Racine utilisateur authentifiée servant de porte maître (Master Gate) sans PII sensible.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID Firebase de l'utilisateur propriétaire."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Nom d'affichage public du compte."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur de création."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur de dernière mise à jour."
+        }
+      },
+      "required": ["ownerId", "displayName", "createdAt", "updatedAt"]
+    },
+    "UserSettings": {
+      "title": "UserSettings",
+      "description": "Préférences IA et clés API de relais optionnelles (Claude, OpenAI, Groq, OpenRouter) isolées par utilisateur.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID Firebase de l'utilisateur propriétaire."
+        },
+        "selectedModel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Identifiant du modèle IA sélectionné."
+        },
+        "selectedProvider": {
+          "type": "string",
+          "enum": ["gemini", "claude", "openai", "groq", "openrouter", "local"],
+          "description": "Fournisseur IA actif."
+        },
+        "claudeKey": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Clé API Anthropic Claude optionnelle."
+        },
+        "openaiKey": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Clé API OpenAI optionnelle."
+        },
+        "groqKey": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Clé API Groq Cloud optionnelle."
+        },
+        "openrouterKey": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "Clé API OpenRouter optionnelle."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur de création."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Horodatage serveur de mise à jour."
+        }
+      },
+      "required": [
+        "ownerId",
+        "selectedModel",
+        "selectedProvider",
+        "claudeKey",
+        "openaiKey",
+        "groqKey",
+        "openrouterKey",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "StudySheetDoc": {
+      "title": "StudySheetDoc",
+      "description": "Fiche de révision scientifique ESTACA synchronisée dans le cloud.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "subtitle": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "chapter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "tags": {
+          "type": "array",
+          "description": "Liste bornée à 25 étiquettes."
+        },
+        "mastery": {
+          "type": "string",
+          "enum": ["to_learn", "learning", "mastered"]
+        },
+        "theorems": {
+          "type": "array",
+          "description": "Liste bornée à 60 théorèmes."
+        },
+        "magicFormulas": {
+          "type": "array",
+          "description": "Liste bornée à 80 formules."
+        },
+        "stepByStepMethods": {
+          "type": "array",
+          "description": "Liste bornée à 60 méthodes."
+        },
+        "examTraps": {
+          "type": "array",
+          "description": "Liste bornée à 60 pièges d'examen."
+        },
+        "flashcards": {
+          "type": "array",
+          "description": "Liste bornée à 120 flashcards."
+        },
+        "quiz": {
+          "type": "array",
+          "description": "Liste bornée à 80 questions de quiz."
+        },
+        "clientCreatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "subjectId",
+        "title",
+        "subtitle",
+        "chapter",
+        "tags",
+        "mastery",
+        "theorems",
+        "magicFormulas",
+        "stepByStepMethods",
+        "examTraps",
+        "flashcards",
+        "quiz",
+        "clientCreatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TDExerciseDoc": {
+      "title": "TDExerciseDoc",
+      "description": "Exercice de TD ESTACA synchronisé dans le cloud.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "chapter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "notion": {
+          "type": "string",
+          "maxLength": 250
+        },
+        "difficulty": {
+          "type": "number"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30000
+        },
+        "hints": {
+          "type": "array",
+          "description": "Liste bornée à 25 indices."
+        },
+        "solution": {
+          "type": "string",
+          "maxLength": 45000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["todo", "in_progress", "completed"]
+        },
+        "clientCreatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "subjectId",
+        "chapter",
+        "title",
+        "notion",
+        "difficulty",
+        "statement",
+        "hints",
+        "solution",
+        "status",
+        "clientCreatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AnnaleItemDoc": {
+      "title": "AnnaleItemDoc",
+      "description": "Annale d'examen ESTACA synchronisée dans le cloud.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "chapter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "notion": {
+          "type": "string",
+          "maxLength": 250
+        },
+        "difficulty": {
+          "type": "number"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 30000
+        },
+        "hints": {
+          "type": "array",
+          "description": "Liste bornée à 25 indices."
+        },
+        "solution": {
+          "type": "string",
+          "maxLength": 45000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["todo", "in_progress", "completed"]
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "year": {
+          "type": "number"
+        },
+        "durationMinutes": {
+          "type": "number"
+        },
+        "points": {
+          "type": "number"
+        },
+        "gradingCriteria": {
+          "type": "array",
+          "description": "Liste bornée à 40 critères de barème."
+        },
+        "clientCreatedAt": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "subjectId",
+        "chapter",
+        "title",
+        "notion",
+        "difficulty",
+        "statement",
+        "hints",
+        "solution",
+        "status",
+        "session",
+        "year",
+        "durationMinutes",
+        "points",
+        "gradingCriteria",
+        "clientCreatedAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserRoot" },
+      "description": "Profil racine de l'utilisateur authentifié (porte maître pour les sous-collections)."
+    },
+    "/users/{userId}/settings/{settingId}": {
+      "schema": { "$ref": "#/entities/UserSettings" },
+      "description": "Paramètres privés de modèles et clés API de relais (document 'preferences')."
+    },
+    "/users/{userId}/sheets/{sheetId}": {
+      "schema": { "$ref": "#/entities/StudySheetDoc" },
+      "description": "Fiches de révision de l'utilisateur."
+    },
+    "/users/{userId}/tdExercises/{exerciseId}": {
+      "schema": { "$ref": "#/entities/TDExerciseDoc" },
+      "description": "Exercices de TD de l'utilisateur."
+    },
+    "/users/{userId}/annales/{annaleId}": {
+      "schema": { "$ref": "#/entities/AnnaleItemDoc" },
+      "description": "Annales d'examen de l'utilisateur."
+    }
+  }
+}

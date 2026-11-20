@@ -25,14 +25,15 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
     definitions: 0,
     tables: 0,
   });
-  const [spiderPos, setSpiderPos] = useState({ x: 20, y: 30 });
+  const [spiderPos, setSpiderPos] = useState({ x: 20, y: 30, tiltDeg: 0 });
   const [highlightActive, setHighlightActive] = useState(false);
 
-  // Synchronize progress and spider animation with real progress steps
+  // Synchronize progress and robotic spider animation with real progress steps
   useEffect(() => {
     if (!isOpen) {
       setScanProgress(10);
       setDetectedElementsCount({ formulas: 0, theorems: 0, definitions: 0, tables: 0 });
+      setSpiderPos({ x: 20, y: 30, tiltDeg: 0 });
       return;
     }
 
@@ -41,8 +42,7 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
         if (prev >= 92) return prev;
         const increment = Math.floor(Math.random() * 8) + 3;
         const next = Math.min(92, prev + increment);
-        
-        // Update mock detected elements dynamically based on progress
+
         if (next > 30 && next <= 60) {
           setDetectedElementsCount({
             formulas: Math.floor(next / 8),
@@ -61,14 +61,19 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
         return next;
       });
 
-      // Move spider across document coordinates
-      setSpiderPos({
-        x: Math.floor(Math.random() * 75) + 12,
-        y: Math.floor(Math.random() * 70) + 15,
+      // Move robotic spider smoothly across document coordinates with directional tilt
+      setSpiderPos(prev => {
+        const nextX = Math.floor(Math.random() * 72) + 14;
+        const nextY = Math.floor(Math.random() * 68) + 14;
+        const dx = nextX - prev.x;
+        const dy = nextY - prev.y;
+        const rawTilt = Math.atan2(dx, Math.max(12, Math.abs(dy))) * (180 / Math.PI) * 0.45;
+        const tiltDeg = Math.max(-24, Math.min(24, Math.round(rawTilt)));
+        return { x: nextX, y: nextY, tiltDeg };
       });
       setHighlightActive(true);
-      setTimeout(() => setHighlightActive(false), 800);
-    }, 1100);
+      setTimeout(() => setHighlightActive(false), 750);
+    }, 950);
 
     return () => clearInterval(interval);
   }, [isOpen]);
@@ -114,8 +119,8 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
             <div>
               <h2 className="font-display text-sm md:text-base font-bold text-slate-100 flex items-center gap-2">
                 <span>{getTargetTitle()}</span>
-                <span className="px-2 py-0.5 text-[10px] rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/30 font-mono">
-                  Mode Vision Scanner IA
+                <span className="px-2 py-0.5 text-[10px] rounded-md bg-amber-500/15 text-amber-300 border border-amber-400/30 font-mono">
+                  Scanner Robotique IA
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
@@ -129,7 +134,7 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
           </div>
         </div>
 
-        {/* Main Content Area: Document Scanner & Animated Spider */}
+        {/* Main Content Area: Document Scanner & Minimalist Robotic Spider */}
         <div className="grid grid-cols-1 md:grid-cols-3 flex-1 overflow-hidden">
           
           {/* Document Preview Box with Simulated / Real Pages & Highlights (2 Cols) */}
@@ -147,28 +152,89 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
               </span>
             </div>
 
-            {/* Document Text Lines container with Spider Canvas Simulation */}
+            {/* Document Text Lines container with Minimalist Robotic Spider Canvas */}
             <div className="relative flex-1 bg-[#070b14] border border-white/[0.08] rounded-xl p-4 space-y-3 overflow-hidden shadow-inner">
               
               {/* Scanning Laser Beam Effect */}
               <div 
-                className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-80 shadow-[0_0_15px_#F59E0B] pointer-events-none transition-all duration-700 ease-in-out"
+                className="absolute left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400/90 to-transparent opacity-80 shadow-[0_0_12px_#38BDF8] pointer-events-none transition-all duration-700 ease-in-out"
                 style={{ top: `${spiderPos.y}%` }}
               />
 
-              {/* Animated Spider ("L'Araignée Scanner") */}
+              {/* Minimalist Robotic Spider ("Araignée Robotique") */}
               <div
-                className="absolute z-30 transition-all duration-700 ease-out pointer-events-none flex flex-col items-center"
+                aria-hidden="true"
+                className="absolute z-30 -translate-x-1/2 -translate-y-1/2 transition-all duration-700 ease-out pointer-events-none flex flex-col items-center"
                 style={{ left: `${spiderPos.x}%`, top: `${spiderPos.y}%` }}
               >
-                {/* Spider Icon / Avatar with legs animation */}
-                <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 border border-amber-400/80 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.6)] animate-bounce">
-                  <span className="text-base select-none">🕷️</span>
-                  {/* Scanning beam dot */}
-                  <span className="absolute -bottom-1 w-1.5 h-1.5 bg-cyan-400 rounded-full animate-ping" />
+                <div
+                  className="relative transition-transform duration-500 ease-out"
+                  style={{ transform: `rotate(${spiderPos.tiltDeg}deg)` }}
+                >
+                  <svg
+                    viewBox="0 0 64 64"
+                    className="w-12 h-12 drop-shadow-[0_0_10px_rgba(56,189,248,0.35)]"
+                    fill="none"
+                  >
+                    {/* Minimalist optical scan cone */}
+                    <polygon
+                      points="32,39 20,62 44,62"
+                      fill="#38BDF8"
+                      fillOpacity={highlightActive ? 0.22 : 0.08}
+                    />
+
+                    {/* Articulated robotic legs — Pair 1 & 3 (Group A) */}
+                    <g className="spider-leg-a" stroke="#94A3B8" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="26,27 16,18 9,23" />
+                      <polyline points="38,27 48,18 55,23" />
+                      <polyline points="25,35 13,39 7,49" />
+                      <polyline points="39,35 51,39 57,49" />
+                      <circle cx="16" cy="18" r="1.4" fill="#F59E0B" stroke="none" />
+                      <circle cx="48" cy="18" r="1.4" fill="#F59E0B" stroke="none" />
+                      <circle cx="13" cy="39" r="1.4" fill="#F59E0B" stroke="none" />
+                      <circle cx="51" cy="39" r="1.4" fill="#F59E0B" stroke="none" />
+                    </g>
+
+                    {/* Articulated robotic legs — Pair 2 & 4 (Group B) */}
+                    <g className="spider-leg-b" stroke="#64748B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="25,31 12,28 6,35" />
+                      <polyline points="39,31 52,28 58,35" />
+                      <polyline points="27,38 19,48 15,57" />
+                      <polyline points="37,38 45,48 49,57" />
+                      <circle cx="12" cy="28" r="1.3" fill="#38BDF8" stroke="none" />
+                      <circle cx="52" cy="28" r="1.3" fill="#38BDF8" stroke="none" />
+                      <circle cx="19" cy="48" r="1.3" fill="#38BDF8" stroke="none" />
+                      <circle cx="45" cy="48" r="1.3" fill="#38BDF8" stroke="none" />
+                    </g>
+
+                    {/* Rear sensor module */}
+                    <polygon
+                      points="28,16 36,16 38,23 26,23"
+                      fill="#0A0E19"
+                      stroke="#F59E0B"
+                      strokeOpacity="0.7"
+                      strokeWidth="1.3"
+                    />
+
+                    {/* Main octagonal robotic chassis */}
+                    <polygon
+                      points="27,23 37,23 41,29 39,38 32,41 25,38 23,29"
+                      fill="#04060C"
+                      stroke="#F59E0B"
+                      strokeWidth="1.5"
+                    />
+                    <circle cx="32" cy="30" r="3.2" stroke="#38BDF8" strokeOpacity="0.6" strokeWidth="1.1" />
+
+                    {/* Minimalist optical sensors */}
+                    <g className="spider-optic-pulse">
+                      <circle cx="29.5" cy="36.2" r="1.3" fill="#38BDF8" />
+                      <circle cx="34.5" cy="36.2" r="1.3" fill="#38BDF8" />
+                      <circle cx="32" cy="38.2" r="1" fill="#F59E0B" />
+                    </g>
+                  </svg>
                 </div>
-                <div className="px-1.5 py-0.5 mt-1 rounded bg-black/85 border border-amber-400/40 text-[9px] text-amber-300 whitespace-nowrap font-mono shadow-md">
-                  Scanning...
+                <div className="px-1.5 py-0.5 rounded bg-[#04060C]/90 border border-cyan-400/35 text-[9px] text-cyan-300 whitespace-nowrap font-mono tracking-wider shadow-md">
+                  SCAN {String(spiderPos.x).padStart(2, '0')}·{String(spiderPos.y).padStart(2, '0')}
                 </div>
               </div>
 

@@ -1,0 +1,326 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL PRIMITIVES ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidShortId(id, maxLen) {
+      return id is string && id.size() >= 1 && id.size() <= maxLen && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isVerifiedOwner(userId) {
+      return isVerifiedUser() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    function hasActiveUserRoot(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.ownerId == request.auth.uid;
+    }
+
+    function isValidListType(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen;
+    }
+
+    // --- VALIDATION BLUEPRINTS ---
+    function isValidUserRoot(data, userId) {
+      return data.keys().hasAll(['ownerId', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerId', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId == userId &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidProvider(p) {
+      return p is string && p in ['gemini', 'claude', 'openai', 'groq', 'openrouter', 'local'];
+    }
+
+    function isValidUserSettings(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'selectedModel', 'selectedProvider',
+          'claudeKey', 'openaiKey', 'groqKey', 'openrouterKey',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'ownerId', 'selectedModel', 'selectedProvider',
+          'claudeKey', 'openaiKey', 'groqKey', 'openrouterKey',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId == userId &&
+        data.selectedModel is string && data.selectedModel.size() >= 1 && data.selectedModel.size() <= 120 &&
+        isValidProvider(data.selectedProvider) &&
+        data.claudeKey is string && data.claudeKey.size() <= 512 &&
+        data.openaiKey is string && data.openaiKey.size() <= 512 &&
+        data.groqKey is string && data.groqKey.size() <= 512 &&
+        data.openrouterKey is string && data.openrouterKey.size() <= 512 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidMastery(m) {
+      return m is string && m in ['to_learn', 'learning', 'mastered'];
+    }
+
+    function isValidExerciseStatus(s) {
+      return s is string && s in ['todo', 'in_progress', 'completed'];
+    }
+
+    function isValidStudySheet(data, userId, sheetId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'subjectId', 'title', 'subtitle', 'chapter',
+          'tags', 'mastery', 'theorems', 'magicFormulas', 'stepByStepMethods',
+          'examTraps', 'flashcards', 'quiz', 'clientCreatedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'subjectId', 'title', 'subtitle', 'chapter',
+          'tags', 'mastery', 'theorems', 'magicFormulas', 'stepByStepMethods',
+          'examTraps', 'flashcards', 'quiz', 'clientCreatedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) && data.id == sheetId &&
+        data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId == userId &&
+        isValidShortId(data.subjectId, 80) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        data.subtitle is string && data.subtitle.size() <= 600 &&
+        data.chapter is string && data.chapter.size() >= 1 && data.chapter.size() <= 200 &&
+        isValidListType(data.tags, 25) && (data.tags.size() == 0 || data.tags[0] is string) &&
+        isValidMastery(data.mastery) &&
+        isValidListType(data.theorems, 60) && (data.theorems.size() == 0 || data.theorems[0] is map) &&
+        isValidListType(data.magicFormulas, 80) && (data.magicFormulas.size() == 0 || data.magicFormulas[0] is map) &&
+        isValidListType(data.stepByStepMethods, 60) && (data.stepByStepMethods.size() == 0 || data.stepByStepMethods[0] is map) &&
+        isValidListType(data.examTraps, 60) && (data.examTraps.size() == 0 || data.examTraps[0] is string) &&
+        isValidListType(data.flashcards, 120) && (data.flashcards.size() == 0 || data.flashcards[0] is map) &&
+        isValidListType(data.quiz, 80) && (data.quiz.size() == 0 || data.quiz[0] is map) &&
+        data.clientCreatedAt is string && data.clientCreatedAt.size() <= 64 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidTDExercise(data, userId, exerciseId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'subjectId', 'chapter', 'title', 'notion',
+          'difficulty', 'statement', 'hints', 'solution', 'status',
+          'clientCreatedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'subjectId', 'chapter', 'title', 'notion',
+          'difficulty', 'statement', 'hints', 'solution', 'status',
+          'clientCreatedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) && data.id == exerciseId &&
+        data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId == userId &&
+        isValidShortId(data.subjectId, 80) &&
+        data.chapter is string && data.chapter.size() >= 1 && data.chapter.size() <= 200 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        data.notion is string && data.notion.size() <= 250 &&
+        data.difficulty is number && data.difficulty >= 1 && data.difficulty <= 3 &&
+        data.statement is string && data.statement.size() >= 1 && data.statement.size() <= 30000 &&
+        isValidListType(data.hints, 25) && (data.hints.size() == 0 || data.hints[0] is string) &&
+        data.solution is string && data.solution.size() <= 45000 &&
+        isValidExerciseStatus(data.status) &&
+        data.clientCreatedAt is string && data.clientCreatedAt.size() <= 64 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAnnaleItem(data, userId, annaleId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'subjectId', 'chapter', 'title', 'notion',
+          'difficulty', 'statement', 'hints', 'solution', 'status',
+          'session', 'year', 'durationMinutes', 'points', 'gradingCriteria',
+          'clientCreatedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'subjectId', 'chapter', 'title', 'notion',
+          'difficulty', 'statement', 'hints', 'solution', 'status',
+          'session', 'year', 'durationMinutes', 'points', 'gradingCriteria',
+          'clientCreatedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) && data.id == annaleId &&
+        data.ownerId is string && data.ownerId == request.auth.uid && data.ownerId == userId &&
+        isValidShortId(data.subjectId, 80) &&
+        data.chapter is string && data.chapter.size() >= 1 && data.chapter.size() <= 200 &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 300 &&
+        data.notion is string && data.notion.size() <= 250 &&
+        data.difficulty is number && data.difficulty >= 1 && data.difficulty <= 3 &&
+        data.statement is string && data.statement.size() >= 1 && data.statement.size() <= 30000 &&
+        isValidListType(data.hints, 25) && (data.hints.size() == 0 || data.hints[0] is string) &&
+        data.solution is string && data.solution.size() <= 45000 &&
+        isValidExerciseStatus(data.status) &&
+        data.session is string && data.session.size() >= 1 && data.session.size() <= 120 &&
+        data.year is number && data.year >= 1950 && data.year <= 2100 &&
+        data.durationMinutes is number && data.durationMinutes >= 5 && data.durationMinutes <= 600 &&
+        data.points is number && data.points >= 1 && data.points <= 200 &&
+        isValidListType(data.gradingCriteria, 40) && (data.gradingCriteria.size() == 0 || data.gradingCriteria[0] is string) &&
+        data.clientCreatedAt is string && data.clientCreatedAt.size() <= 64 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // --- MATCH BLOCKS ---
+    match /users/{userId} {
+      allow get: if isVerifiedOwner(userId) && (resource == null || existing().ownerId == request.auth.uid);
+      allow list: if false;
+
+      allow create: if isVerifiedOwner(userId) &&
+        isValidUserRoot(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedOwner(userId) &&
+        isValidUserRoot(incoming(), userId) &&
+        incoming().ownerId == existing().ownerId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /settings/{settingId} {
+        allow get: if isVerifiedOwner(userId) && settingId == 'preferences' &&
+          hasActiveUserRoot(userId) && (resource == null || existing().ownerId == request.auth.uid);
+        allow list: if false;
+
+        allow create: if isVerifiedOwner(userId) && settingId == 'preferences' &&
+          isValidUserSettings(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId);
+
+        allow update: if isVerifiedOwner(userId) && settingId == 'preferences' &&
+          isValidUserSettings(incoming(), userId) &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'selectedModel', 'selectedProvider',
+            'claudeKey', 'openaiKey', 'groqKey', 'openrouterKey',
+            'updatedAt'
+          ]);
+
+        allow delete: if isVerifiedOwner(userId) && settingId == 'preferences' && hasActiveUserRoot(userId);
+      }
+
+      match /sheets/{sheetId} {
+        allow get: if isVerifiedOwner(userId) && isValidId(sheetId) &&
+          hasActiveUserRoot(userId) && (resource == null || existing().ownerId == request.auth.uid);
+
+        allow list: if isVerifiedUser() && request.auth.uid == userId &&
+          existing().ownerId == request.auth.uid;
+
+        allow create: if isVerifiedOwner(userId) && isValidId(sheetId) &&
+          isValidStudySheet(incoming(), userId, sheetId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId);
+
+        allow update: if isVerifiedOwner(userId) && isValidId(sheetId) &&
+          isValidStudySheet(incoming(), userId, sheetId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId) && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['mastery', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly(['quiz', 'flashcards', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'subjectId', 'title', 'subtitle', 'chapter', 'tags', 'mastery',
+              'theorems', 'magicFormulas', 'stepByStepMethods', 'examTraps',
+              'flashcards', 'quiz', 'updatedAt'
+            ])
+          );
+
+        allow delete: if isVerifiedOwner(userId) && isValidId(sheetId) &&
+          hasActiveUserRoot(userId) && existing().ownerId == request.auth.uid;
+      }
+
+      match /tdExercises/{exerciseId} {
+        allow get: if isVerifiedOwner(userId) && isValidId(exerciseId) &&
+          hasActiveUserRoot(userId) && (resource == null || existing().ownerId == request.auth.uid);
+
+        allow list: if isVerifiedUser() && request.auth.uid == userId &&
+          existing().ownerId == request.auth.uid;
+
+        allow create: if isVerifiedOwner(userId) && isValidId(exerciseId) &&
+          isValidTDExercise(incoming(), userId, exerciseId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId);
+
+        allow update: if isVerifiedOwner(userId) && isValidId(exerciseId) &&
+          isValidTDExercise(incoming(), userId, exerciseId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId) && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'subjectId', 'chapter', 'title', 'notion', 'difficulty',
+              'statement', 'hints', 'solution', 'status', 'updatedAt'
+            ])
+          );
+
+        allow delete: if isVerifiedOwner(userId) && isValidId(exerciseId) &&
+          hasActiveUserRoot(userId) && existing().ownerId == request.auth.uid;
+      }
+
+      match /annales/{annaleId} {
+        allow get: if isVerifiedOwner(userId) && isValidId(annaleId) &&
+          hasActiveUserRoot(userId) && (resource == null || existing().ownerId == request.auth.uid);
+
+        allow list: if isVerifiedUser() && request.auth.uid == userId &&
+          existing().ownerId == request.auth.uid;
+
+        allow create: if isVerifiedOwner(userId) && isValidId(annaleId) &&
+          isValidAnnaleItem(incoming(), userId, annaleId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId);
+
+        allow update: if isVerifiedOwner(userId) && isValidId(annaleId) &&
+          isValidAnnaleItem(incoming(), userId, annaleId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          hasActiveUserRoot(userId) && (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'subjectId', 'chapter', 'title', 'notion', 'difficulty',
+              'statement', 'hints', 'solution', 'status', 'session',
+              'year', 'durationMinutes', 'points', 'gradingCriteria', 'updatedAt'
+            ])
+          );
+
+        allow delete: if isVerifiedOwner(userId) && isValidId(annaleId) &&
+          hasActiveUserRoot(userId) && existing().ownerId == request.auth.uid;
+      }
+    }
+  }
+}
