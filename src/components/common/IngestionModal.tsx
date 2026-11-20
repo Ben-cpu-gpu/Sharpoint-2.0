@@ -5,6 +5,7 @@ import { transformLectureToToolbox, parseTdDocument } from '../../services/aiSer
 import { AnnaleItem, StudySheet, TDExercise } from '../../types/course';
 import { availableSubjects } from '../../data/initialData';
 import { resolveSubjectId } from '../../utils/courseCatalog';
+import { SpiderExtractionScanner } from './SpiderExtractionScanner';
 
 interface IngestionModalProps {
   isOpen: boolean;
@@ -399,6 +400,15 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
           </button>
         </div>
       </div>
+
+      <SpiderExtractionScanner
+        isOpen={isProcessing}
+        fileName={selectedFile?.name}
+        targetType={targetType}
+        progressStep={progressStep}
+        pdfPageProgress={pdfPageProgress}
+        rawTextSample={rawText || undefined}
+      />
     </div>
   );
 };
