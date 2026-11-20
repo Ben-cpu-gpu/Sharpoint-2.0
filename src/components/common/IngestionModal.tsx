@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, UploadCloud, FileText, CheckCircle2, Loader2, Sparkles, AlertTriangle, FileCode } from 'lucide-react';
 import { extractTextFromPdf } from '../../services/pdfService';
 import {
@@ -9,6 +9,7 @@ import {
 import { AnnaleItem, StudySheet, TDExercise } from '../../types/course';
 import { availableSubjects } from '../../data/initialData';
 import { resolveSubjectId } from '../../utils/courseCatalog';
+import { PdfScannedPage } from '../../utils/documentExtraction';
 import { mapTabToDestination } from '../../utils/pdfTelemetry';
 import { MainTab } from './Header';
 import { SpiderExtractionScanner } from './SpiderExtractionScanner';
@@ -52,11 +53,17 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
   } | null>(null);
   const [aiProgress, setAiProgress] = useState<AIExtractionProgress | null>(null);
   const [liveDocText, setLiveDocText] = useState<string>('');
+  const [scannedPages, setScannedPages] = useState<PdfScannedPage[]>([]);
   const [usingLocalMode, setUsingLocalMode] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+  const [completionSummary, setCompletionSummary] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showConsentDialog, setShowConsentDialog] = useState(false);
   const [consentFailureDetails, setConsentFailureDetails] = useState<string[]>([]);
   const [pendingTextToProcess, setPendingTextToProcess] = useState<string>('');
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const transitionTimerRef = useRef<number | null>(null);
+  const pendingFinishRef = useRef<(() => void) | null>(null);
 
   // Synchronise automatiquement Anneau 1 (destination) et Anneau 2 (matière) à l'ouverture
   useEffect(() => {
@@ -69,7 +76,15 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
         )
       );
       setErrorMessage(null);
+      setIsComplete(false);
+      setCompletionSummary('');
     }
+    return () => {
+      if (transitionTimerRef.current) {
+        window.clearTimeout(transitionTimerRef.current);
+        transitionTimerRef.current = null;
+      }
+    };
   }, [isOpen, defaultTargetType, defaultSubjectId]);
 
   if (!isOpen) return null;
@@ -105,30 +120,72 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
     setPdfProgress(null);
     setAiProgress(null);
     setUsingLocalMode(false);
+    setScannedPages([]);
+    setIsComplete(false);
+    setCompletionSummary('');
+    abortControllerRef.current = null;
   };
 
-  const executeExtraction = async (text: string, forceLocal = false) => {
+  const finalizeAndClose = () => {
+    if (transitionTimerRef.current) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    const cb = pendingFinishRef.current;
+    pendingFinishRef.current = null;
+    if (cb) cb();
+    resetProcessingTelemetry();
+    setLiveDocText('');
+    setSelectedFile(null);
+    setRawText('');
+    onClose();
+  };
+
+  const handleCancelExtraction = () => {
+    abortControllerRef.current?.abort();
+    if (transitionTimerRef.current) {
+      window.clearTimeout(transitionTimerRef.current);
+      transitionTimerRef.current = null;
+    }
+    pendingFinishRef.current = null;
+    resetProcessingTelemetry();
+    setErrorMessage('Extraction annulée proprement.');
+  };
+
+  const executeExtraction = async (
+    text: string,
+    forceLocal = false,
+    existingController?: AbortController
+  ) => {
+    const controller = existingController || new AbortController();
+    abortControllerRef.current = controller;
+
     setIsProcessing(true);
     setErrorMessage(null);
     setShowConsentDialog(false);
     setLiveDocText(text);
     setUsingLocalMode(forceLocal);
     setAiProgress(null);
+    setIsComplete(false);
+    setCompletionSummary('');
 
     try {
+      let summary = '';
       if (targetType === 'sheet') {
         setProgressStep(
           forceLocal
             ? 'Génération locale de la fiche...'
-            : 'Extraction de la fiche de révision via IA...'
+            : 'Extraction complète de la fiche via IA...'
         );
         const newSheet = await transformLectureToToolbox(
           text,
           forceLocal,
           targetSubjectId,
-          prog => setAiProgress(prog)
+          prog => setAiProgress(prog),
+          controller.signal
         );
-        onSheetCreated(newSheet);
+        summary = `Fiche « ${newSheet.title} » prête (${newSheet.theorems.length} théorèmes, ${newSheet.magicFormulas.length} formules).`;
+        pendingFinishRef.current = () => onSheetCreated(newSheet);
       } else if (targetType === 'td') {
         setProgressStep(
           forceLocal
@@ -140,9 +197,11 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
           'td',
           forceLocal,
           targetSubjectId,
-          prog => setAiProgress(prog)
+          prog => setAiProgress(prog),
+          controller.signal
         )) as TDExercise[];
-        onTdCreated(exercises);
+        summary = `${exercises.length} exercice(s) de TD extraits avec corrections détaillées.`;
+        pendingFinishRef.current = () => onTdCreated(exercises);
       } else {
         setProgressStep(
           forceLocal
@@ -154,17 +213,23 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
           'annale',
           forceLocal,
           targetSubjectId,
-          prog => setAiProgress(prog)
+          prog => setAiProgress(prog),
+          controller.signal
         )) as AnnaleItem[];
-        onAnnalesCreated(annales);
+        summary = `${annales.length} annale(s) d'examen extraite(s) avec barème.`;
+        pendingFinishRef.current = () => onAnnalesCreated(annales);
       }
 
-      resetProcessingTelemetry();
-      setLiveDocText('');
-      setSelectedFile(null);
-      setRawText('');
-      onClose();
+      setIsComplete(true);
+      setCompletionSummary(summary);
+      transitionTimerRef.current = window.setTimeout(() => {
+        finalizeAndClose();
+      }, 950);
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) {
+        resetProcessingTelemetry();
+        return;
+      }
       setIsProcessing(false);
       setUsingLocalMode(false);
       if (err?.message === 'REQUIRE_USER_CONSENT') {
@@ -182,6 +247,11 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
     setErrorMessage(null);
     setConsentFailureDetails([]);
     setAiProgress(null);
+    setScannedPages([]);
+    setIsComplete(false);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     let contentToIngest = rawText.trim();
 
@@ -190,19 +260,31 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
       setUsingLocalMode(false);
       setLiveDocText('');
       setPdfProgress({ current: 0, total: 0, done: false });
-      setProgressStep('Extraction locale du texte PDF...');
+      setProgressStep('Rendu des pages PDF et détection des coordonnées...');
       try {
-        contentToIngest = await extractTextFromPdf(selectedFile, p => {
-          setPdfProgress({ current: p.current, total: p.total, done: false });
-          if (p.accumulatedText) {
-            setLiveDocText(p.accumulatedText);
-          }
-        });
+        contentToIngest = await extractTextFromPdf(
+          selectedFile,
+          p => {
+            setPdfProgress({ current: p.current, total: p.total, done: false });
+            if (p.accumulatedText) {
+              setLiveDocText(p.accumulatedText);
+            }
+            if (p.scannedPages) {
+              setScannedPages(p.scannedPages);
+            }
+          },
+          controller.signal
+        );
         setPdfProgress(prev =>
           prev ? { current: prev.total || 1, total: prev.total || 1, done: true } : { current: 1, total: 1, done: true }
         );
         setLiveDocText(contentToIngest);
       } catch (pdfErr: any) {
+        if (pdfErr?.name === 'AbortError' || controller.signal.aborted) {
+          resetProcessingTelemetry();
+          setErrorMessage('Lecture du PDF annulée.');
+          return;
+        }
         resetProcessingTelemetry();
         setErrorMessage(`Erreur lecture PDF : ${pdfErr.message}`);
         return;
@@ -218,7 +300,7 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
       return;
     }
 
-    await executeExtraction(contentToIngest, false);
+    await executeExtraction(contentToIngest, false, controller);
   };
 
   return (
@@ -503,9 +585,14 @@ export const IngestionModal: React.FC<IngestionModalProps> = ({
         progressStep={progressStep}
         hasPdfFile={Boolean(selectedFile)}
         pdfProgress={pdfProgress}
+        scannedPages={scannedPages}
         aiProgress={aiProgress}
         liveText={liveDocText || rawText}
         forceLocalMode={usingLocalMode}
+        isComplete={isComplete}
+        completionSummary={completionSummary}
+        onCancel={handleCancelExtraction}
+        onFinishTransition={finalizeAndClose}
       />
     </div>
   );

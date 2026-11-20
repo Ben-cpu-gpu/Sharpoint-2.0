@@ -6,13 +6,30 @@ import { executeWithFallback } from '../../services/aiService';
 interface KatexRepairModalProps {
   isOpen: boolean;
   initialLatex?: string;
+  targetLabel?: string;
   onClose: () => void;
-  onFixed?: (fixedLatex: string) => void;
+  onFixed?: (fixedLatex: string, originalSnippet: string) => void;
+}
+
+function localHeuristicKatexFix(raw: string): string {
+  let cleaned = raw.trim();
+  // Corrige les indices multi-caractères sans accolades (ex: _Gz -> _{Gz}, C_z0 -> C_{z0})
+  if (!cleaned.includes('_{') && /_[A-Za-z0-9]{2,}/.test(cleaned)) {
+    cleaned = cleaned.replace(/_([A-Za-z0-9]{2,})/g, '_{$1}');
+  }
+  // Ferme automatiquement les accolades manquantes
+  const openCount = (cleaned.match(/\{/g) || []).length;
+  const closeCount = (cleaned.match(/\}/g) || []).length;
+  if (openCount > closeCount) {
+    cleaned += '}'.repeat(openCount - closeCount);
+  }
+  return cleaned;
 }
 
 export const KatexRepairModal: React.FC<KatexRepairModalProps> = ({
   isOpen,
   initialLatex = '',
+  targetLabel,
   onClose,
   onFixed,
 }) => {
@@ -35,7 +52,7 @@ export const KatexRepairModal: React.FC<KatexRepairModalProps> = ({
 
   const handleRepair = async () => {
     if (!inputLatex.trim()) {
-      setErrorMessage('Veuillez entrer une formule KaTeX ou LaTeX à réparer.');
+      setErrorMessage('Veuillez entrer ou sélectionner une formule KaTeX / LaTeX à réparer.');
       return;
     }
 
@@ -46,7 +63,7 @@ export const KatexRepairModal: React.FC<KatexRepairModalProps> = ({
       const systemPrompt = `Tu es un expert en typographie mathématique et syntaxe KaTeX (LaTeX).
 Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non fermées, antislashs manquants, environnements incorrects, indices mal formés comme _Gz au lieu de _{Gz}), et retourne un JSON valide strict :
 {
-  "fixedLatex": string (code KaTeX corrigé et 100% valide),
+  "fixedLatex": string (code KaTeX corrigé sans délimiteurs $$ externes sauf si présents dans l'original, 100% valide),
   "explanation": string (explication concise des corrections apportées en français)
 }`;
 
@@ -60,22 +77,24 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
           explanation: parsed.explanation || 'Correction syntaxique KaTeX appliquée.',
         }),
         false,
-        () => {
-          // Fallback local heuristique si l'IA cloud ne répond pas
-          let cleaned = inputLatex.trim();
-          if (!cleaned.includes('{') && cleaned.includes('_')) {
-            cleaned = cleaned.replace(/_([A-Za-z0-9]{2,})/g, '_{$1}');
-          }
-          return {
-            fixedLatex: cleaned,
-            explanation: 'Correction automatique locale des indices et des symboles KaTeX.',
-          };
-        }
+        () => ({
+          fixedLatex: localHeuristicKatexFix(inputLatex),
+          explanation: 'Correction automatique locale des accolades, indices et symboles KaTeX.',
+        }),
+        undefined,
+        { preferLightFastModel: true }
       );
 
       setFixedResult(result);
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Erreur lors de la réparation KaTeX par IA.');
+      if (err?.message === 'REQUIRE_USER_CONSENT') {
+        setFixedResult({
+          fixedLatex: localHeuristicKatexFix(inputLatex),
+          explanation: 'IA cloud indisponible : réparation syntaxique locale appliquée (vous pouvez aussi éditer le code manuellement ci-dessus).',
+        });
+      } else {
+        setErrorMessage(err?.message || 'Erreur lors de la réparation KaTeX par IA.');
+      }
     } finally {
       setIsRepairing(false);
     }
@@ -83,7 +102,11 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
 
   const handleCopy = () => {
     if (!fixedResult?.fixedLatex) return;
-    navigator.clipboard.writeText(fixedResult.fixedLatex);
+    try {
+      navigator.clipboard?.writeText?.(fixedResult.fixedLatex)?.catch(() => {});
+    } catch {
+      // Ignore clipboard restrictions
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -107,7 +130,9 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
                 Assistant KaTeX &amp; Réparateur IA
               </h2>
               <p className="text-xs text-slate-400">
-                Correction automatique des erreurs de syntaxe graphique &amp; LaTeX
+                {targetLabel
+                  ? `Cible sélectionnée : ${targetLabel}`
+                  : 'Correction automatique des erreurs de syntaxe graphique & LaTeX'}
               </p>
             </div>
           </div>
@@ -124,19 +149,20 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
         {/* Body */}
         <div className="p-6 overflow-y-auto space-y-4 font-mono text-xs">
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-2 font-sans">
+            <label htmlFor="katexRepairInput" className="block text-xs font-semibold text-slate-300 mb-2 font-sans">
               Code KaTeX / LaTeX à analyser et réparer
             </label>
             <textarea
+              id="katexRepairInput"
               value={inputLatex}
               onChange={e => setInputLatex(e.target.value)}
-              placeholder="Collez ici votre formule KaTeX cassée (ex: \frac{a}{b_0 ...)..."
+              placeholder="Collez ou sélectionnez une formule KaTeX cassée (ex: \frac{a}{b_0 ...)..."
               rows={3}
               className="w-full rounded-xl bg-[#04060C] border border-white/[0.1] p-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-400/60 font-mono"
             />
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
             <button
               type="button"
               onClick={handleRepair}
@@ -197,9 +223,17 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
 
               <div className="space-y-1 font-mono text-[11px]">
                 <div className="text-slate-400">Code KaTeX corrigé :</div>
-                <div className="p-2 rounded bg-[#0A0E19] text-amber-200 border border-white/[0.08] select-all">
-                  {fixedResult.fixedLatex}
-                </div>
+                <input
+                  type="text"
+                  aria-label="Code KaTeX corrigé"
+                  value={fixedResult.fixedLatex}
+                  onChange={e =>
+                    setFixedResult(prev =>
+                      prev ? { ...prev, fixedLatex: e.target.value } : prev
+                    )
+                  }
+                  className="w-full p-2 rounded bg-[#0A0E19] text-amber-200 border border-white/[0.08] focus:outline-none focus:border-amber-400/60"
+                />
               </div>
 
               <p className="text-xs text-slate-300 italic pt-1">
@@ -211,10 +245,10 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
                   <button
                     type="button"
                     onClick={() => {
-                      onFixed(fixedResult.fixedLatex);
+                      onFixed(fixedResult.fixedLatex, initialLatex || inputLatex);
                       onClose();
                     }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors"
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors cursor-pointer"
                   >
                     Appliquer cette correction
                   </button>
@@ -226,7 +260,7 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-white/[0.08] bg-[#04060C] flex items-center justify-between text-xs text-slate-400 font-sans">
-          <span>Assistant KaTeX intégré pour la boîte à outils ESTACA</span>
+          <span>Sélectionnez une formule ou surlignez du texte pour le réparer en place.</span>
           <button
             type="button"
             onClick={onClose}

@@ -15,6 +15,9 @@ import { ApiKeyModal } from './components/common/ApiKeyModal';
 import { DebugDrawer } from './components/common/DebugDrawer';
 import { IngestionModal } from './components/common/IngestionModal';
 import { KatexRepairModal } from './components/common/KatexRepairModal';
+import { GalacticTouchVFX } from './components/common/GalacticTouchVFX';
+import { SelectionRepairBar, SelectedKatexTarget } from './components/common/SelectionRepairBar';
+import { PracticeBatchModal } from './components/common/PracticeBatchModal';
 import { SolarSystemNav } from './components/common/SolarSystemNav';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { CloudSyncState, MobileAuthError } from './components/common/CloudSyncControl';
@@ -29,6 +32,7 @@ import {
   resolveActiveSheet,
   resolveSubjectId,
 } from './utils/courseCatalog';
+import { patchTextInExercise, patchTextInSheet } from './utils/documentExtraction';
 import {
   mergeLocalAndCloudById,
   mergeRelaySettings,
@@ -99,6 +103,13 @@ export const App: React.FC = () => {
   const [isIngestionOpen, setIsIngestionOpen] = useState(false);
   const [isKatexRepairOpen, setIsKatexRepairOpen] = useState(false);
   const [repairKatexInitial, setRepairKatexInitial] = useState('');
+  const [repairKatexTarget, setRepairKatexTarget] = useState<{
+    scopeType: 'sheet' | 'td' | 'annale';
+    scopeId: string;
+    label?: string;
+  } | null>(null);
+  const [isPracticeBatchOpen, setIsPracticeBatchOpen] = useState(false);
+  const [practiceBatchType, setPracticeBatchType] = useState<'td' | 'annale'>('td');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [apiModalInitialTab, setApiModalInitialTab] = useState<AIProvider | undefined>(undefined);
   const [isTestingAll, setIsTestingAll] = useState(false);
@@ -130,13 +141,42 @@ export const App: React.FC = () => {
     });
   };
 
+  const openScopedKatexRepair = (
+    snippet: string,
+    scopeType: 'sheet' | 'td' | 'annale',
+    scopeId: string
+  ) => {
+    setRepairKatexInitial(snippet);
+    setRepairKatexTarget({
+      scopeType,
+      scopeId,
+      label:
+        scopeType === 'sheet'
+          ? 'Fiche de cours active'
+          : scopeType === 'td'
+          ? 'Exercice de TD'
+          : "Annale d'examen",
+    });
+    setIsKatexRepairOpen(true);
+  };
+
   useEffect(() => {
     const handleGlobalKatexClick = (e: MouseEvent) => {
       const target = (e.target as HTMLElement).closest('.katex-repair-trigger');
       if (target) {
         const rawLatex = target.getAttribute('data-latex');
         if (rawLatex) {
+          const scopeEl = target.closest('[data-katex-repair-scope]') as HTMLElement | null;
+          if (scopeEl) {
+            const st = (scopeEl.getAttribute('data-scope-type') || 'sheet') as 'sheet' | 'td' | 'annale';
+            const sid = scopeEl.getAttribute('data-scope-id') || '';
+            if (sid) {
+              openScopedKatexRepair(decodeURIComponent(rawLatex), st, sid);
+              return;
+            }
+          }
           setRepairKatexInitial(decodeURIComponent(rawLatex));
+          setRepairKatexTarget(null);
           setIsKatexRepairOpen(true);
         }
       }
@@ -772,6 +812,7 @@ export const App: React.FC = () => {
     <ErrorBoundary>
       <div className="relative min-h-screen bg-[#04060C] text-slate-100 flex flex-col font-sans pb-20 md:pb-8 overflow-x-clip">
         <CosmicBackdrop focusMode={focusMode} />
+        <GalacticTouchVFX disabled={focusMode} />
 
         <div className="relative z-10 flex flex-col min-h-screen min-w-0">
           <Header
@@ -781,6 +822,7 @@ export const App: React.FC = () => {
             onOpenSettings={() => handleOpenDashboard()}
             onOpenKatexRepair={() => {
               setRepairKatexInitial('');
+              setRepairKatexTarget(null);
               setIsKatexRepairOpen(true);
             }}
             onManualSave={handleManualSave}
@@ -974,6 +1016,13 @@ export const App: React.FC = () => {
                             setIsRevisionOpen(true);
                           }}
                           onUpdateSheet={handleUpdateSheet}
+                          onOpenPracticeBatch={type => {
+                            setPracticeBatchType(type);
+                            setIsPracticeBatchOpen(true);
+                          }}
+                          onSelectKatexForRepair={(snippet, scopeType, scopeId) =>
+                            openScopedKatexRepair(snippet, scopeType, scopeId)
+                          }
                         />
                       ) : (
                         <div className="py-20 px-6 text-center text-slate-400 bg-[#0A0E19]/80 rounded-2xl border border-white/[0.08] space-y-5">
@@ -1045,6 +1094,13 @@ export const App: React.FC = () => {
                   }
                   showToast('Exercice supprimé.');
                 }}
+                onOpenPracticeBatch={() => {
+                  setPracticeBatchType('td');
+                  setIsPracticeBatchOpen(true);
+                }}
+                onSelectKatexForRepair={(snippet, scopeType, scopeId) =>
+                  openScopedKatexRepair(snippet, scopeType, scopeId)
+                }
               />
             )}
 
@@ -1079,6 +1135,13 @@ export const App: React.FC = () => {
                   }
                   showToast('Annale supprimée.');
                 }}
+                onOpenPracticeBatch={() => {
+                  setPracticeBatchType('annale');
+                  setIsPracticeBatchOpen(true);
+                }}
+                onSelectKatexForRepair={(snippet, scopeType, scopeId) =>
+                  openScopedKatexRepair(snippet, scopeType, scopeId)
+                }
               />
             )}
           </main>
@@ -1139,12 +1202,91 @@ export const App: React.FC = () => {
           />
         )}
 
+        <SelectionRepairBar
+          onRepairSelection={(target: SelectedKatexTarget) => {
+            openScopedKatexRepair(target.snippet, target.scopeType, target.scopeId);
+          }}
+        />
+
         <KatexRepairModal
           isOpen={isKatexRepairOpen}
           initialLatex={repairKatexInitial}
+          targetLabel={repairKatexTarget?.label}
           onClose={() => setIsKatexRepairOpen(false)}
-          onFixed={_fixed => {
-            showToast('Formule KaTeX corrigée copiée / prête.');
+          onFixed={(fixedLatex, originalSnippet) => {
+            const snippetToFind = originalSnippet || repairKatexInitial;
+            let appliedInPlace = false;
+
+            if (repairKatexTarget && snippetToFind) {
+              if (repairKatexTarget.scopeType === 'sheet') {
+                const targetSheet = sheets.find(s => s.id === repairKatexTarget.scopeId);
+                if (targetSheet) {
+                  const res = patchTextInSheet(targetSheet, snippetToFind, fixedLatex);
+                  if (res.replaced) {
+                    handleUpdateSheet(res.sheet);
+                    appliedInPlace = true;
+                  }
+                }
+              } else if (repairKatexTarget.scopeType === 'td') {
+                const targetExo = tdExercises.find(e => e.id === repairKatexTarget.scopeId);
+                if (targetExo) {
+                  const res = patchTextInExercise(targetExo, snippetToFind, fixedLatex);
+                  if (res.replaced) {
+                    const next = tdExercises.map(e => (e.id === res.item.id ? res.item : e));
+                    setTdExercises(next);
+                    saveAppData(sheets, next, annales);
+                    if (cloudUser) runCloudTask(upsertTDExerciseInCloud(cloudUser.uid, res.item));
+                    appliedInPlace = true;
+                  }
+                }
+              } else if (repairKatexTarget.scopeType === 'annale') {
+                const targetAnnale = annales.find(a => a.id === repairKatexTarget.scopeId);
+                if (targetAnnale) {
+                  const res = patchTextInExercise(targetAnnale, snippetToFind, fixedLatex);
+                  if (res.replaced) {
+                    const next = annales.map(a => (a.id === res.item.id ? res.item : a));
+                    setAnnales(next);
+                    saveAppData(sheets, tdExercises, next);
+                    if (cloudUser) runCloudTask(upsertAnnaleInCloud(cloudUser.uid, res.item));
+                    appliedInPlace = true;
+                  }
+                }
+              }
+            } else if (snippetToFind && resolvedActiveSheet && currentTab === 'sheets') {
+              const res = patchTextInSheet(resolvedActiveSheet, snippetToFind, fixedLatex);
+              if (res.replaced) {
+                handleUpdateSheet(res.sheet);
+                appliedInPlace = true;
+              }
+            }
+
+            try {
+              navigator.clipboard?.writeText?.(fixedLatex)?.catch(() => {});
+            } catch {
+              // Ignore clipboard restrictions
+            }
+
+            showToast(
+              appliedInPlace
+                ? 'Correction KaTeX appliquée directement dans le document !'
+                : 'Formule KaTeX corrigée et copiée dans le presse-papiers.'
+            );
+          }}
+        />
+
+        <PracticeBatchModal
+          isOpen={isPracticeBatchOpen}
+          initialType={practiceBatchType}
+          defaultSubjectId={selectedSubjectId}
+          sheets={sheets}
+          onClose={() => setIsPracticeBatchOpen(false)}
+          onExercisesCreated={newExercises => {
+            handleTdIngested(newExercises);
+            showToast(`${newExercises.length} exercices générés avec corrections détaillées !`);
+          }}
+          onAnnalesCreated={newAnnales => {
+            handleAnnalesIngested(newAnnales);
+            showToast(`${newAnnales.length} annales générées avec barème et corrigés !`);
           }}
         />
 

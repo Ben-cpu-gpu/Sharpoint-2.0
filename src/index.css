@@ -200,3 +200,18 @@
 .latex-focus .katex-display {
   padding: 1rem 0;
 }
+
+/* Direct KaTeX formula selection mode */
+[data-katex-select-mode="true"] .katex-formula-node {
+  cursor: pointer;
+  border-radius: 0.45rem;
+  outline: 1px dashed rgba(245, 158, 11, 0.45);
+  outline-offset: 3px;
+  transition: background-color 150ms ease, outline-color 150ms ease;
+}
+
+[data-katex-select-mode="true"] .katex-formula-node:hover {
+  background-color: rgba(245, 158, 11, 0.14);
+  outline-color: rgba(245, 158, 11, 0.95);
+}
+

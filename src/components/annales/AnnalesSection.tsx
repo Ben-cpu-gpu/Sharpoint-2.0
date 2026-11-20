@@ -11,6 +11,8 @@ import {
   Loader2,
   Trash2,
   Play,
+  Wand2,
+  Zap,
 } from 'lucide-react';
 import { AnnaleItem, ExerciseStatus, DifficultyLevel } from '../../types/course';
 import { MathView } from '../common/MathView';
@@ -23,6 +25,8 @@ interface AnnalesSectionProps {
   onUpdateAnnale: (annale: AnnaleItem) => void;
   onAddAnnale: (annale: AnnaleItem) => void;
   onDeleteAnnale: (id: string) => void;
+  onOpenPracticeBatch?: () => void;
+  onSelectKatexForRepair?: (snippet: string, scopeType: 'annale', scopeId: string) => void;
 }
 
 export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
@@ -31,12 +35,15 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
   onUpdateAnnale,
   onAddAnnale,
   onDeleteAnnale,
+  onOpenPracticeBatch,
+  onSelectKatexForRepair,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all');
   const [selectedSession, setSelectedSession] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<ExerciseStatus | 'all'>('all');
+  const [katexSelectMode, setKatexSelectMode] = useState(false);
 
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [revealedHints, setRevealedHints] = useState<Record<string, number>>({});
@@ -202,6 +209,34 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
               </button>
             ))}
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setKatexSelectMode(!katexSelectMode)}
+              aria-pressed={katexSelectMode}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap border ${
+                katexSelectMode
+                  ? 'bg-amber-500 text-[#04060C] border-amber-400'
+                  : 'bg-[#04060C] text-slate-200 border-white/[0.1] hover:border-amber-400/40'
+              }`}
+              title="Cliquez sur n'importe quelle formule pour la réparer en place"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>{katexSelectMode ? 'Cliquez sur une formule' : 'Cibler KaTeX'}</span>
+            </button>
+
+            {onOpenPracticeBatch && (
+              <button
+                type="button"
+                onClick={onOpenPracticeBatch}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#04060C] text-xs font-bold transition-colors whitespace-nowrap cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Générer pack d&apos;annales IA</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -226,6 +261,10 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
             return (
               <article
                 key={annale.id}
+                data-katex-repair-scope="true"
+                data-scope-type="annale"
+                data-scope-id={annale.id}
+                data-katex-select-mode={katexSelectMode ? 'true' : 'false'}
                 className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors hover:border-white/[0.15]"
               >
                 <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[#0D1322]/60 border-b border-white/[0.06]">
@@ -313,7 +352,13 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                 {isExpanded && (
                   <div className="p-5 space-y-4">
                     <div className="text-xs text-slate-200 leading-relaxed bg-[#04060C] p-4 rounded-xl border border-white/[0.07] whitespace-pre-wrap select-text">
-                      <MathView math={annale.statement} />
+                      <MathView
+                        math={annale.statement}
+                        onOpenRepair={snippet => {
+                          setKatexSelectMode(false);
+                          onSelectKatexForRepair?.(snippet, 'annale', annale.id);
+                        }}
+                      />
                     </div>
 
                     {annale.gradingCriteria && annale.gradingCriteria.length > 0 && (
@@ -326,7 +371,14 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                           {annale.gradingCriteria.map((crit, cIdx) => (
                             <li key={cIdx} className="flex items-start gap-2.5 leading-relaxed">
                               <span className="font-mono text-sky-400">0{cIdx + 1}</span>
-                              <MathView>{crit}</MathView>
+                              <MathView
+                                onOpenRepair={snippet => {
+                                  setKatexSelectMode(false);
+                                  onSelectKatexForRepair?.(snippet, 'annale', annale.id);
+                                }}
+                              >
+                                {crit}
+                              </MathView>
                             </li>
                           ))}
                         </ul>
@@ -363,7 +415,13 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                               >
                                 <span className="font-bold text-amber-400 font-mono">0{hIdx + 1}</span>
                                 <div className="flex-1 leading-relaxed">
-                                  <MathView math={hint} />
+                                  <MathView
+                                    math={hint}
+                                    onOpenRepair={snippet => {
+                                      setKatexSelectMode(false);
+                                      onSelectKatexForRepair?.(snippet, 'annale', annale.id);
+                                    }}
+                                  />
                                 </div>
                               </div>
                             ))}
@@ -390,7 +448,13 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
 
                       {isSolutionVisible && (
                         <div className="mt-3 p-4 rounded-xl bg-[#04060C] border border-emerald-400/25 text-xs text-slate-200 space-y-2 whitespace-pre-wrap select-text animate-fade-in leading-relaxed">
-                          <MathView math={annale.solution} />
+                          <MathView
+                            math={annale.solution}
+                            onOpenRepair={snippet => {
+                              setKatexSelectMode(false);
+                              onSelectKatexForRepair?.(snippet, 'annale', annale.id);
+                            }}
+                          />
                         </div>
                       )}
                     </div>

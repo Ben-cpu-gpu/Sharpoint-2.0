@@ -12,6 +12,8 @@ import {
   GraduationCap,
   PlusCircle,
   Loader2,
+  Wand2,
+  Zap,
 } from 'lucide-react';
 import { StudySheet, MasteryLevel } from '../../types/course';
 import { MathView } from '../common/MathView';
@@ -23,6 +25,8 @@ interface SheetViewerProps {
   onEdit: () => void;
   onOpenRevision: (initialMode: 'flashcards' | 'quiz') => void;
   onUpdateSheet: (updated: StudySheet) => void;
+  onOpenPracticeBatch?: (type: 'td' | 'annale') => void;
+  onSelectKatexForRepair?: (snippet: string, scopeType: 'sheet', scopeId: string) => void;
 }
 
 export const SheetViewer: React.FC<SheetViewerProps> = ({
@@ -30,9 +34,12 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
   onEdit,
   onOpenRevision,
   onUpdateSheet,
+  onOpenPracticeBatch,
+  onSelectKatexForRepair,
 }) => {
   const [focusLatex, setFocusLatex] = useState(false);
   const [activeRecall, setActiveRecall] = useState(false);
+  const [katexSelectMode, setKatexSelectMode] = useState(false);
   const [revealedItems, setRevealedItems] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<'all' | 'theorems' | 'formulas' | 'methods' | 'traps'>('all');
   const [imgFailed, setImgFailed] = useState(false);
@@ -42,6 +49,11 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
   const [notionPrompt, setNotionPrompt] = useState('');
   const [isLoadingNotion, setIsLoadingNotion] = useState(false);
   const [notionError, setNotionError] = useState<string | null>(null);
+
+  const handleOpenFormulaRepair = (snippet: string) => {
+    setKatexSelectMode(false);
+    onSelectKatexForRepair?.(snippet, 'sheet', sheet.id);
+  };
 
   const toggleReveal = (id: string) => {
     setRevealedItems(prev => ({ ...prev, [id]: !prev[id] }));
@@ -113,7 +125,13 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
   };
 
   return (
-    <div className={`space-y-6 ${focusLatex ? 'latex-focus' : ''}`}>
+    <div
+      data-katex-repair-scope="true"
+      data-scope-type="sheet"
+      data-scope-id={sheet.id}
+      data-katex-select-mode={katexSelectMode ? 'true' : 'false'}
+      className={`space-y-6 ${focusLatex ? 'latex-focus' : ''}`}
+    >
       {/* Event Horizon Hero Header Card */}
       <div className="bg-[#0A0E19] border border-white/[0.1] rounded-2xl p-5 sm:p-7 relative overflow-hidden">
         {/* Atmospheric Black Hole Singularity Backdrop */}
@@ -229,9 +247,36 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
               <PlusCircle className="w-3.5 h-3.5 text-amber-400" />
               <span>Ajouter notion IA</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setKatexSelectMode(!katexSelectMode)}
+              aria-pressed={katexSelectMode}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
+                katexSelectMode
+                  ? 'bg-amber-500 text-[#04060C] border-amber-400'
+                  : 'bg-[#04060C]/80 border-white/[0.1] text-slate-200 hover:border-amber-400/40'
+              }`}
+              title="Cliquez directement sur n'importe quelle formule ou surlignez du texte pour le réparer"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>{katexSelectMode ? 'Cliquez sur une formule...' : 'Cibler KaTeX'}</span>
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {onOpenPracticeBatch && (
+              <button
+                type="button"
+                onClick={() => onOpenPracticeBatch('td')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#101625] hover:bg-[#161F35] border border-emerald-400/30 text-emerald-200 text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+                title="Générer plusieurs exercices ou annales corrigés à partir de ce cours"
+              >
+                <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Générer Exercices IA</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => onOpenRevision('flashcards')}
@@ -431,7 +476,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                         Active Recall : récitez l'énoncé mathématique de tête, puis révélez.
                       </p>
                     ) : (
-                      <MathView math={thm.statement} block />
+                      <MathView math={thm.statement} block onOpenRepair={handleOpenFormulaRepair} />
                     )}
                   </div>
 
@@ -447,7 +492,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                         {thm.strictConditions.map((cond, idx) => (
                           <li key={idx} className="text-xs text-slate-300 flex items-start gap-2.5 leading-relaxed">
                             <span className="text-sky-400 font-mono mt-0.5">—</span>
-                            <MathView>{cond}</MathView>
+                            <MathView onOpenRepair={handleOpenFormulaRepair}>{cond}</MathView>
                           </li>
                         ))}
                       </ul>
@@ -511,7 +556,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                           Formule masquée pour auto-évaluation
                         </p>
                       ) : (
-                        <MathView math={formula.formula} block />
+                        <MathView math={formula.formula} block onOpenRepair={handleOpenFormulaRepair} />
                       )}
                     </div>
 
@@ -522,7 +567,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                           <span className="text-slate-500 italic">Masqué</span>
                         ) : (
                           <span className="text-slate-200">
-                            <MathView>{formula.unitsAndVariables}</MathView>
+                            <MathView onOpenRepair={handleOpenFormulaRepair}>{formula.unitsAndVariables}</MathView>
                           </span>
                         )}
                       </div>
@@ -589,7 +634,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                         >
                           <span className="font-mono text-emerald-400 font-semibold">0{idx + 1}</span>
                           <div className="flex-1 leading-relaxed">
-                            <MathView>{step}</MathView>
+                            <MathView onOpenRepair={handleOpenFormulaRepair}>{step}</MathView>
                           </div>
                         </li>
                       ))}
@@ -627,7 +672,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
               <div key={idx} className="flex items-start gap-3 text-xs text-rose-200/90 leading-relaxed">
                 <span className="font-mono text-rose-400 font-bold shrink-0">0{idx + 1}</span>
                 <span>
-                  <MathView>{trap}</MathView>
+                  <MathView onOpenRepair={handleOpenFormulaRepair}>{trap}</MathView>
                 </span>
               </div>
             ))}

@@ -133,16 +133,48 @@ export const PROVIDER_MODEL_CHAINS: Record<CloudAIProvider, readonly string[]> =
   ],
 };
 
+export const LIGHT_FAST_MODEL_CHAINS: Record<CloudAIProvider, readonly string[]> = {
+  gemini: [
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-4-hydrogen',
+    'gemini-2.5-pro',
+  ],
+  groq: [
+    'llama-3.1-8b-instant',
+    'qwen/qwen3-32b',
+    'llama-3.3-70b-versatile',
+  ],
+  cerebras: [
+    'llama3.1-8b',
+    'qwen-3-32b',
+    'llama-3.3-70b',
+  ],
+  mistral: [
+    'open-mistral-nemo',
+    'mistral-small-latest',
+  ],
+  openrouter: [
+    'google/gemma-3-27b-it:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'deepseek/deepseek-r1-0528:free',
+  ],
+};
+
 /**
  * Retourne la liste ordonnée des modèles valides à tenter pour un fournisseur donné.
  * Place le modèle préféré en tête (s'il appartient bien à ce fournisseur), suivi des modèles de secours.
+ * Si preferLightFastModel === true, privilégie les modèles rapides/légers (ex: gemini-3.1-flash-lite, gemini-2.5-flash).
  */
 export function getCandidateModelsForProvider(
   provider: CloudAIProvider,
-  preferredModel?: string
+  preferredModel?: string,
+  preferLightFastModel = false
 ): string[] {
-  const defaults = PROVIDER_MODEL_CHAINS[provider] || [];
-  if (preferredModel && defaults.includes(preferredModel)) {
+  const defaults = preferLightFastModel
+    ? LIGHT_FAST_MODEL_CHAINS[provider] || PROVIDER_MODEL_CHAINS[provider] || []
+    : PROVIDER_MODEL_CHAINS[provider] || [];
+  if (!preferLightFastModel && preferredModel && defaults.includes(preferredModel)) {
     return [preferredModel, ...defaults.filter(m => m !== preferredModel)];
   }
   return [...defaults];

@@ -19,6 +19,11 @@ import {
 } from '../utils/aiFallbackOrder';
 import { DEFAULT_SUBJECT_ID } from '../utils/courseCatalog';
 import { extractJsonFromModelText } from '../utils/pdfTelemetry';
+import {
+  chunkDocumentByPages,
+  mergeExercises,
+  mergeStudySheets,
+} from '../utils/documentExtraction';
 
 export interface AIExtractionProgress {
   provider: string;
@@ -29,7 +34,24 @@ export interface AIExtractionProgress {
   streamedText?: string;
 }
 
-export const STRICT_EXHAUSTIVENESS_RULE = `CONSIGNE DE RIGUEUR ET D'EXHAUSTIVITÉ ABSOLUE : Tu as interdiction formelle de résumer, de tronquer, d'abréger ou d'omettre des notions. Tu dois extraire l'intégralité du contenu mathématique et physique présent dans le document fourni. Si le document comporte 15 formules, tu dois extraire les 15 formules. N'utilise jamais de 'etc.' ou de 'de même pour...'. Définis 100% des variables avec leurs unités SI.`;
+export interface AIExecutionOptions {
+  signal?: AbortSignal;
+  preferLightFastModel?: boolean;
+  maxOutputTokens?: number;
+}
+
+export const STRICT_EXHAUSTIVENESS_RULE = `CONSIGNE DE RIGUEUR, EXHAUSTIVITÉ ET ZÉRO HALLUCINATION :
+1. N'invente JAMAIS aucune constante, valeur numérique, équation, théorème ou citation absente du cours ou des lois scientifiques établies. Si une grandeur est absente du polycopié, indique-le explicitement plutôt que de l'inventer.
+2. Interdiction formelle de résumer, tronquer, abréger ou utiliser "etc." / "de même pour...". Extrais 100% des théorèmes, 100% des formules, 100% des conditions strictes de validité et définis chaque variable avec son unité SI exacte.
+3. Rédige toute formule mathématique en LaTeX valide compatible KaTeX (accolades fermées _{...}, ^{...}, \\frac{...}{...}).`;
+
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) {
+    const err = new Error('Extraction annulée par l’utilisateur.');
+    err.name = 'AbortError';
+    throw err;
+  }
+}
 
 function cleanJsonOutput(text: string): string {
   return extractJsonFromModelText(text);
@@ -87,25 +109,34 @@ async function callGemini(
   userPrompt: string,
   modelOverride?: string,
   onProgress?: (progress: AIExtractionProgress) => void,
-  allowCascade = true
+  allowCascade = true,
+  execOptions?: AIExecutionOptions
 ): Promise<{ text: string; activeModel: string }> {
-  const modelName = resolveClientGeminiModel(modelOverride);
+  const signal = execOptions?.signal;
+  throwIfAborted(signal);
+  const modelName = execOptions?.preferLightFastModel
+    ? 'gemini-3.1-flash-lite'
+    : resolveClientGeminiModel(modelOverride);
   const fullSystemPrompt = `${STRICT_EXHAUSTIVENESS_RULE}\n\n${systemPrompt}`;
   const maxAttempts = 3;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    throwIfAborted(signal);
     // 1) En mode streaming interactif, essaie /api/gemini/stream pour fournir une progression réelle en direct
     if (onProgress) {
       try {
         const streamRes = await fetch('/api/gemini/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal,
           body: JSON.stringify({
             systemPrompt: fullSystemPrompt,
             userPrompt,
             model: modelName,
             responseMimeType: 'application/json',
             cascadeModels: allowCascade,
+            preferLightFastModel: Boolean(execOptions?.preferLightFastModel),
+            maxOutputTokens: execOptions?.maxOutputTokens ?? 16384,
           }),
         });
 
@@ -119,6 +150,7 @@ async function callGemini(
           let streamErr: { statusCode: number; message: string; rawPayload?: string } | null = null;
 
           while (true) {
+            throwIfAborted(signal);
             const { done, value } = await reader.read();
             if (done) break;
             buffer += decoder.decode(value, { stream: true });
@@ -139,7 +171,7 @@ async function callGemini(
               }
               if (payload.text) {
                 fullText += payload.text;
-                const estPct = Math.min(94, Math.max(18, 18 + Math.round(fullText.length / 45)));
+                const estPct = Math.min(94, Math.max(18, 18 + Math.round(fullText.length / 75)));
                 onProgress({
                   provider: 'Gemini (Serveur)',
                   model: activeModel,
@@ -182,6 +214,9 @@ async function callGemini(
           }
         }
       } catch (err: any) {
+        if (err?.name === 'AbortError' || signal?.aborted) {
+          throw err;
+        }
         if (err?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
           throw err;
         }
@@ -193,12 +228,15 @@ async function callGemini(
     const response = await fetch('/api/gemini/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal,
       body: JSON.stringify({
         systemPrompt: fullSystemPrompt,
         userPrompt,
         model: modelName,
         responseMimeType: 'application/json',
         cascadeModels: allowCascade,
+        preferLightFastModel: Boolean(execOptions?.preferLightFastModel),
+        maxOutputTokens: execOptions?.maxOutputTokens ?? 16384,
       }),
     });
 
@@ -322,7 +360,13 @@ export async function streamGeminiContent(
 /**
  * 2. APPEL GROQ CLOUD (awesome-free-llm-apis · Tier Gratuit Llama 3.3 / Qwen 3)
  */
-async function callGroq(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
+async function callGroq(
+  systemPrompt: string,
+  userPrompt: string,
+  modelOverride?: string,
+  keyOverride?: string,
+  signal?: AbortSignal
+): Promise<string> {
   const apiKey = keyOverride ?? getGroqApiKey();
   const GROQ_MODEL = modelOverride && (modelOverride.includes('llama') || modelOverride.includes('qwen'))
     ? modelOverride
@@ -349,6 +393,7 @@ async function callGroq(systemPrompt: string, userPrompt: string, modelOverride?
     ],
     response_format: { type: 'json_object' },
     temperature: 0.1,
+    max_tokens: 8192,
   };
 
   const response = await fetch(url, {
@@ -357,6 +402,7 @@ async function callGroq(systemPrompt: string, userPrompt: string, modelOverride?
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
+    signal,
     body: JSON.stringify(payload),
   });
 
@@ -380,7 +426,13 @@ async function callGroq(systemPrompt: string, userPrompt: string, modelOverride?
 /**
  * 3. APPEL CEREBRAS CLOUD (awesome-free-llm-apis · 1M tokens/jour gratuits sans CB)
  */
-async function callCerebras(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
+async function callCerebras(
+  systemPrompt: string,
+  userPrompt: string,
+  modelOverride?: string,
+  keyOverride?: string,
+  signal?: AbortSignal
+): Promise<string> {
   const apiKey = keyOverride ?? getCerebrasApiKey();
   const CEREBRAS_MODEL =
     modelOverride === 'qwen-3-32b' || modelOverride === 'llama3.1-8b' || modelOverride === 'llama-3.3-70b'
@@ -408,6 +460,7 @@ async function callCerebras(systemPrompt: string, userPrompt: string, modelOverr
     ],
     response_format: { type: 'json_object' },
     temperature: 0.1,
+    max_tokens: 8192,
   };
 
   const response = await fetch(url, {
@@ -416,6 +469,7 @@ async function callCerebras(systemPrompt: string, userPrompt: string, modelOverr
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
+    signal,
     body: JSON.stringify(payload),
   });
 
@@ -448,7 +502,13 @@ async function callCerebras(systemPrompt: string, userPrompt: string, modelOverr
 /**
  * 4. APPEL MISTRAL AI (awesome-free-llm-apis · La Plateforme Experiment gratuit)
  */
-async function callMistral(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
+async function callMistral(
+  systemPrompt: string,
+  userPrompt: string,
+  modelOverride?: string,
+  keyOverride?: string,
+  signal?: AbortSignal
+): Promise<string> {
   const apiKey = keyOverride ?? getMistralApiKey();
   const MISTRAL_MODEL =
     modelOverride === 'open-mistral-nemo' || modelOverride === 'mistral-small-latest'
@@ -476,6 +536,7 @@ async function callMistral(systemPrompt: string, userPrompt: string, modelOverri
     ],
     response_format: { type: 'json_object' },
     temperature: 0.1,
+    max_tokens: 8192,
   };
 
   const response = await fetch(url, {
@@ -484,6 +545,7 @@ async function callMistral(systemPrompt: string, userPrompt: string, modelOverri
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${apiKey}`,
     },
+    signal,
     body: JSON.stringify(payload),
   });
 
@@ -516,7 +578,13 @@ async function callMistral(systemPrompt: string, userPrompt: string, modelOverri
 /**
  * 5. APPEL OPENROUTER (:free officiel — awesome-free-llm-apis · Llama 3.3 / DeepSeek R1 / Gemma 3)
  */
-async function callOpenRouter(systemPrompt: string, userPrompt: string, modelOverride?: string, keyOverride?: string): Promise<string> {
+async function callOpenRouter(
+  systemPrompt: string,
+  userPrompt: string,
+  modelOverride?: string,
+  keyOverride?: string,
+  signal?: AbortSignal
+): Promise<string> {
   const apiKey = keyOverride ?? getOpenRouterApiKey();
   const OR_MODEL = modelOverride && modelOverride.endsWith(':free')
     ? modelOverride
@@ -542,6 +610,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, modelOve
       { role: 'user', content: userPrompt }
     ],
     temperature: 0.1,
+    max_tokens: 8192,
   };
 
   const response = await fetch(url, {
@@ -552,6 +621,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, modelOve
       'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://fichemaster.local',
       'X-Title': 'FicheMaster IA',
     },
+    signal,
     body: JSON.stringify(payload),
   });
 
@@ -792,8 +862,12 @@ export async function executeWithFallback<T>(
   validator: (parsed: any) => T,
   forceLocal?: boolean,
   localFallbackFn?: () => T,
-  onProgress?: (progress: AIExtractionProgress) => void
+  onProgress?: (progress: AIExtractionProgress) => void,
+  execOptions?: AIExecutionOptions
 ): Promise<T> {
+  const signal = execOptions?.signal;
+  throwIfAborted(signal);
+
   const selectedProvider = getSelectedProvider();
   const selectedModel = getSelectedModel();
 
@@ -837,6 +911,7 @@ export async function executeWithFallback<T>(
   const totalProviders = Math.max(1, resolution.configuredCloudChain.length);
 
   for (let pIdx = 0; pIdx < resolution.configuredCloudChain.length; pIdx++) {
+    throwIfAborted(signal);
     const currentProvider = resolution.configuredCloudChain[pIdx];
     const providerLabel = PROVIDER_LOG_LABELS[currentProvider];
 
@@ -844,13 +919,21 @@ export async function executeWithFallback<T>(
     // pour les autres API (Groq, Cerebras, Mistral, OpenRouter), on parcourt chaque modèle candidat si l'un est indisponible/404/quota.
     const candidateModels =
       currentProvider === 'gemini'
-        ? [currentProvider === selectedProvider ? selectedModel : DEFAULT_PROVIDER_MODELS.gemini]
+        ? [
+            execOptions?.preferLightFastModel
+              ? 'gemini-3.1-flash-lite'
+              : currentProvider === selectedProvider
+              ? selectedModel
+              : DEFAULT_PROVIDER_MODELS.gemini,
+          ]
         : getCandidateModelsForProvider(
             currentProvider,
-            currentProvider === selectedProvider ? selectedModel : undefined
+            currentProvider === selectedProvider ? selectedModel : undefined,
+            Boolean(execOptions?.preferLightFastModel)
           );
 
     for (let mIdx = 0; mIdx < candidateModels.length; mIdx++) {
+      throwIfAborted(signal);
       const modelToUse = candidateModels[mIdx];
       const basePct = Math.min(82, 10 + Math.round(((pIdx * 2 + mIdx) / Math.max(2, totalProviders * 2)) * 55));
 
@@ -867,17 +950,17 @@ export async function executeWithFallback<T>(
         let resolvedModelName = modelToUse;
 
         if (currentProvider === 'gemini') {
-          const geminiOut = await callGemini(systemPrompt, userPrompt, modelToUse, onProgress, true);
+          const geminiOut = await callGemini(systemPrompt, userPrompt, modelToUse, onProgress, true, execOptions);
           rawResult = geminiOut.text;
           resolvedModelName = geminiOut.activeModel;
         } else if (currentProvider === 'groq') {
-          rawResult = await callGroq(systemPrompt, userPrompt, modelToUse);
+          rawResult = await callGroq(systemPrompt, userPrompt, modelToUse, undefined, signal);
         } else if (currentProvider === 'cerebras') {
-          rawResult = await callCerebras(systemPrompt, userPrompt, modelToUse);
+          rawResult = await callCerebras(systemPrompt, userPrompt, modelToUse, undefined, signal);
         } else if (currentProvider === 'mistral') {
-          rawResult = await callMistral(systemPrompt, userPrompt, modelToUse);
+          rawResult = await callMistral(systemPrompt, userPrompt, modelToUse, undefined, signal);
         } else {
-          rawResult = await callOpenRouter(systemPrompt, userPrompt, modelToUse);
+          rawResult = await callOpenRouter(systemPrompt, userPrompt, modelToUse, undefined, signal);
         }
 
         const parsed = JSON.parse(cleanJsonOutput(rawResult));
@@ -903,6 +986,9 @@ export async function executeWithFallback<T>(
 
         return validated;
       } catch (providerError: any) {
+        if (providerError?.name === 'AbortError' || signal?.aborted) {
+          throw providerError;
+        }
         const failedModel = providerError?.model || modelToUse;
         const statusCode = providerError?.statusCode || 0;
         const msg = providerError?.message || `Échec sur ${failedModel}`;
@@ -1047,7 +1133,7 @@ function localParseTd(text: string, type: 'td' | 'annale', subjectId = DEFAULT_S
   const chunks = text.split(/(?:Exercice|Problème|Partie|Exercice\s*\d+|EXERCICE)/i).filter(c => c.trim().length > 20);
   if (chunks.length === 0) chunks.push(text);
 
-  return chunks.slice(0, 5).map((chunk, idx) => {
+  return chunks.map((chunk, idx) => {
     const lines = chunk.trim().split('\n').map(l => l.trim()).filter(Boolean);
     const title = lines[0]?.substring(0, 60) || `Exercice ${idx + 1}`;
     const statement = lines.slice(1, 10).join('\n') || chunk.substring(0, 300);
@@ -1097,10 +1183,19 @@ export async function transformLectureToToolbox(
   text: string,
   forceLocal?: boolean,
   subjectId = DEFAULT_SUBJECT_ID,
-  onProgress?: (progress: AIExtractionProgress) => void
+  onProgress?: (progress: AIExtractionProgress) => void,
+  signal?: AbortSignal
 ): Promise<StudySheet> {
+  throwIfAborted(signal);
+  const chunks = chunkDocumentByPages(text, 20000);
+  const effectiveChunks = chunks.length > 0 ? chunks : [text];
+
   const systemPrompt = `Tu es un professeur émérite d'école d'ingénieurs aéronautique et automobile (type ESTACA).
-Transforme le cours fourni en une boîte à outils de révision ultra-exhaustive au format JSON.
+Transforme le cours fourni en une boîte à outils de révision ULTRA-COMPLÈTE et FIDÈLE AU DOCUMENT au format JSON.
+
+RÈGLES ANTI-HALLUCINATION ET D'EXHAUSTIVITÉ :
+- N'invente AUCUNE donnée, valeur numérique, constante ou formule absente du texte source.
+- Couvre la totalité du segment fourni : extrais TOUS les théorèmes/principes (avec toutes leurs conditions strictes), TOUTES les formules clés (avec toutes les variables et unités SI), les méthodes de résolution complètes étape par étape, les pièges classiques d'examen, au moins 5 flashcards précises et au moins 4 questions de QCM calculatoires/conceptuelles (s'appuyant uniquement sur le contenu fourni).
 
 Structure JSON attendue :
 {
@@ -1113,7 +1208,7 @@ Structure JSON attendue :
       "name": string,
       "statement": string (formule LaTeX entre $$...$$ ou $...$),
       "strictConditions": string[] (toutes les hypothèses indispensables sans exception),
-      "professorTip": string (astuce d'examen)
+      "professorTip": string (astuce d'examen tirée du cours)
     }
   ],
   "magicFormulas": [
@@ -1145,59 +1240,98 @@ Structure JSON attendue :
   ]
 }`;
 
-  const userPrompt = `Voici le cours d'ingénierie à analyser :\n\n${text.substring(0, 30000)}`;
+  const mapParsedSheet = (parsed: any, suffix: string): StudySheet => ({
+    id: `sheet_${Date.now()}${suffix}`,
+    subjectId,
+    title: parsed.title || 'Fiche de Révision',
+    subtitle: parsed.subtitle || 'Synthèse complète et rigoureuse',
+    chapter: parsed.chapter || 'Généralités',
+    tags: Array.isArray(parsed.tags) ? parsed.tags : ['Ingénierie', 'ESTACA'],
+    mastery: 'to_learn',
+    theorems: (parsed.theorems || []).map((t: any, i: number) => ({
+      id: `thm_${Date.now()}_${suffix}_${i}`,
+      name: t.name || 'Théorème',
+      statement: t.statement || '',
+      strictConditions: Array.isArray(t.strictConditions) ? t.strictConditions : [t.strictConditions || ''],
+      professorTip: t.professorTip,
+    })),
+    magicFormulas: (parsed.magicFormulas || []).map((f: any, i: number) => ({
+      id: `fml_${Date.now()}_${suffix}_${i}`,
+      name: f.name || 'Formule',
+      formula: f.formula || '',
+      unitsAndVariables: f.unitsAndVariables || '',
+      validityDomain: f.validityDomain || '',
+    })),
+    stepByStepMethods: (parsed.stepByStepMethods || []).map((m: any, i: number) => ({
+      id: `mth_${Date.now()}_${suffix}_${i}`,
+      goal: m.goal || 'Méthode',
+      steps: Array.isArray(m.steps) ? m.steps : [m.steps || ''],
+      trapToAvoid: m.trapToAvoid,
+    })),
+    examTraps: Array.isArray(parsed.examTraps) ? parsed.examTraps : [],
+    flashcards: (parsed.flashcards || []).map((fc: any, i: number) => ({
+      id: `fc_${Date.now()}_${suffix}_${i}`,
+      question: fc.question || '',
+      answer: fc.answer || '',
+    })),
+    quiz: (parsed.quiz || []).map((q: any, i: number) => ({
+      id: `qz_${Date.now()}_${suffix}_${i}`,
+      question: q.question || '',
+      options: (q.options && q.options.length === 4) ? q.options : ['A', 'B', 'C', 'D'],
+      correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
+      explanation: q.explanation || '',
+    })),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
 
-  return executeWithFallback<StudySheet>(
-    systemPrompt,
-    userPrompt,
-    (parsed) => ({
-      id: `sheet_${Date.now()}`,
-      subjectId,
-      title: parsed.title || 'Fiche de Révision',
-      subtitle: parsed.subtitle || 'Synthèse chirurgicale',
-      chapter: parsed.chapter || 'Généralités',
-      tags: Array.isArray(parsed.tags) ? parsed.tags : ['Ingénierie', 'ESTACA'],
-      mastery: 'to_learn',
-      theorems: (parsed.theorems || []).map((t: any, i: number) => ({
-        id: `thm_${Date.now()}_${i}`,
-        name: t.name || 'Théorème',
-        statement: t.statement || '',
-        strictConditions: Array.isArray(t.strictConditions) ? t.strictConditions : [t.strictConditions || ''],
-        professorTip: t.professorTip,
-      })),
-      magicFormulas: (parsed.magicFormulas || []).map((f: any, i: number) => ({
-        id: `fml_${Date.now()}_${i}`,
-        name: f.name || 'Formule',
-        formula: f.formula || '',
-        unitsAndVariables: f.unitsAndVariables || '',
-        validityDomain: f.validityDomain || '',
-      })),
-      stepByStepMethods: (parsed.stepByStepMethods || []).map((m: any, i: number) => ({
-        id: `mth_${Date.now()}_${i}`,
-        goal: m.goal || 'Méthode',
-        steps: Array.isArray(m.steps) ? m.steps : [m.steps || ''],
-        trapToAvoid: m.trapToAvoid,
-      })),
-      examTraps: Array.isArray(parsed.examTraps) ? parsed.examTraps : [],
-      flashcards: (parsed.flashcards || []).map((fc: any, i: number) => ({
-        id: `fc_${Date.now()}_${i}`,
-        question: fc.question || '',
-        answer: fc.answer || '',
-      })),
-      quiz: (parsed.quiz || []).map((q: any, i: number) => ({
-        id: `qz_${Date.now()}_${i}`,
-        question: q.question || '',
-        options: (q.options && q.options.length === 4) ? q.options : ['A', 'B', 'C', 'D'],
-        correctIndex: typeof q.correctIndex === 'number' ? q.correctIndex : 0,
-        explanation: q.explanation || '',
-      })),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }),
-    forceLocal,
-    () => localExtractToolbox(text, subjectId),
-    onProgress
-  );
+  if (forceLocal || effectiveChunks.length === 1) {
+    const userPrompt = `Voici le cours d'ingénierie à analyser intégralement :\n\n${effectiveChunks[0]}`;
+    return executeWithFallback<StudySheet>(
+      systemPrompt,
+      userPrompt,
+      (parsed) => mapParsedSheet(parsed, ''),
+      forceLocal,
+      () => localExtractToolbox(text, subjectId),
+      onProgress,
+      { signal, maxOutputTokens: 16384 }
+    );
+  }
+
+  const partialSheets: StudySheet[] = [];
+  for (let idx = 0; idx < effectiveChunks.length; idx++) {
+    throwIfAborted(signal);
+    const segmentLabel = `Segment ${idx + 1}/${effectiveChunks.length}`;
+    const userPrompt = `Voici le ${segmentLabel} du cours d'ingénierie à analyser intégralement sans rien omettre :\n\n${effectiveChunks[idx]}`;
+    const sheetPart = await executeWithFallback<StudySheet>(
+      systemPrompt,
+      userPrompt,
+      (parsed) => mapParsedSheet(parsed, `_p${idx}`),
+      false,
+      () => localExtractToolbox(effectiveChunks[idx], subjectId),
+      prog => {
+        if (!onProgress) return;
+        const scaledPct = Math.round(((idx + prog.aiPct / 100) / effectiveChunks.length) * 100);
+        onProgress({
+          ...prog,
+          aiPct: Math.min(99, Math.max(5, scaledPct)),
+          stepLabel: `${segmentLabel} — ${prog.stepLabel}`,
+        });
+      },
+      { signal, maxOutputTokens: 16384 }
+    );
+    partialSheets.push(sheetPart);
+  }
+
+  const merged = mergeStudySheets(partialSheets, subjectId);
+  onProgress?.({
+    provider: 'Synthèse Multi-Segments',
+    model: `${effectiveChunks.length} segments fusionnés`,
+    aiPct: 100,
+    bytesReceived: text.length,
+    stepLabel: `Fiche complète générée (${merged.theorems.length} théorèmes, ${merged.magicFormulas.length} formules).`,
+  });
+  return merged;
 }
 
 export async function parseTdDocument(
@@ -1205,13 +1339,18 @@ export async function parseTdDocument(
   type: 'td' | 'annale',
   forceLocal?: boolean,
   subjectId = DEFAULT_SUBJECT_ID,
-  onProgress?: (progress: AIExtractionProgress) => void
+  onProgress?: (progress: AIExtractionProgress) => void,
+  signal?: AbortSignal
 ): Promise<Array<TDExercise | AnnaleItem>> {
+  throwIfAborted(signal);
   const isAnnale = type === 'annale';
+  const chunks = chunkDocumentByPages(text, 20000);
+  const effectiveChunks = chunks.length > 0 ? chunks : [text];
 
   const systemPrompt = `Tu es un correcteur officiel d'épreuves d'école d'ingénieurs (ESTACA).
 Analyse le document fourni (${isAnnale ? "Sujet d'annale d'examen" : "Feuille de TD"}).
-Découpe rigoureusement chaque exercice et fournis la solution ultra-détaillée avec tous les calculs intermédiaires, formules en LaTeX, indices et barème.
+RÈGLE ANTI-HALLUCINATION : conserve fidèlement les énoncés, données et grandeurs du document sans inventer de valeurs numériques absentes.
+Découpe rigoureusement CHAQUE exercice ou problème présent dans ce segment et fournis une solution ultra-détaillée avec tous les calculs intermédiaires, vérifications dimensionnelles, formules LaTeX valides, indices et barème.
 
 Format JSON attendu :
 {
@@ -1235,50 +1374,89 @@ Format JSON attendu :
   ]
 }`;
 
-  const userPrompt = `Voici le document à découper et corriger :\n\n${text.substring(0, 30000)}`;
+  const mapParsedItems = (parsed: any, suffix: string): Array<TDExercise | AnnaleItem> => {
+    const list = Array.isArray(parsed) ? parsed : (parsed.exercises || []);
+    return list.map((item: any, i: number) => {
+      const base: TDExercise = {
+        id: `exo_${Date.now()}_${suffix}_${i}`,
+        subjectId,
+        chapter: item.chapter || 'Chapitre Général',
+        title: item.title || `Exercice ${i + 1}`,
+        notion: item.notion || 'Notion clé',
+        difficulty: [1, 2, 3].includes(item.difficulty) ? item.difficulty : 2,
+        statement: item.statement || '',
+        hints: Array.isArray(item.hints) ? item.hints : [],
+        solution: item.solution || 'Solution en cours de rédaction.',
+        status: 'todo',
+        createdAt: new Date().toISOString(),
+      };
 
-  return executeWithFallback<Array<TDExercise | AnnaleItem>>(
-    systemPrompt,
-    userPrompt,
-    (parsed) => {
-      const list = Array.isArray(parsed) ? parsed : (parsed.exercises || []);
-      return list.map((item: any, i: number) => {
-        const base: TDExercise = {
-          id: `exo_${Date.now()}_${i}`,
-          subjectId,
-          chapter: item.chapter || 'Chapitre Général',
-          title: item.title || `Exercice ${i + 1}`,
-          notion: item.notion || 'Notion clé',
-          difficulty: [1, 2, 3].includes(item.difficulty) ? item.difficulty : 2,
-          statement: item.statement || '',
-          hints: Array.isArray(item.hints) ? item.hints : [],
-          solution: item.solution || 'Solution en cours de rédaction.',
-          status: 'todo',
-          createdAt: new Date().toISOString(),
+      if (isAnnale) {
+        const annale: AnnaleItem = {
+          ...base,
+          session: item.session || 'Session Principale',
+          year: item.year || new Date().getFullYear(),
+          durationMinutes: item.durationMinutes || 120,
+          points: item.points || 20,
+          gradingCriteria: Array.isArray(item.gradingCriteria) ? item.gradingCriteria : [
+            'Rigueur littérale : 50%',
+            'Unités SI : 30%',
+            'Esprit critique : 20%'
+          ],
         };
+        return annale;
+      }
+      return base;
+    });
+  };
 
-        if (isAnnale) {
-          const annale: AnnaleItem = {
-            ...base,
-            session: item.session || 'Session Principale',
-            year: item.year || new Date().getFullYear(),
-            durationMinutes: item.durationMinutes || 120,
-            points: item.points || 20,
-            gradingCriteria: Array.isArray(item.gradingCriteria) ? item.gradingCriteria : [
-              'Rigueur littérale : 50%',
-              'Unités SI : 30%',
-              'Esprit critique : 20%'
-            ],
-          };
-          return annale;
-        }
-        return base;
-      });
-    },
-    forceLocal,
-    () => localParseTd(text, type, subjectId),
-    onProgress
-  );
+  if (forceLocal || effectiveChunks.length === 1) {
+    const userPrompt = `Voici le document à découper et corriger intégralement :\n\n${effectiveChunks[0]}`;
+    return executeWithFallback<Array<TDExercise | AnnaleItem>>(
+      systemPrompt,
+      userPrompt,
+      (parsed) => mapParsedItems(parsed, 's0'),
+      forceLocal,
+      () => localParseTd(text, type, subjectId),
+      onProgress,
+      { signal, maxOutputTokens: 16384 }
+    );
+  }
+
+  const allLists: Array<Array<TDExercise | AnnaleItem>> = [];
+  for (let idx = 0; idx < effectiveChunks.length; idx++) {
+    throwIfAborted(signal);
+    const segmentLabel = `Segment ${idx + 1}/${effectiveChunks.length}`;
+    const userPrompt = `Voici le ${segmentLabel} du document à découper et corriger intégralement :\n\n${effectiveChunks[idx]}`;
+    const part = await executeWithFallback<Array<TDExercise | AnnaleItem>>(
+      systemPrompt,
+      userPrompt,
+      (parsed) => mapParsedItems(parsed, `p${idx}`),
+      false,
+      () => localParseTd(effectiveChunks[idx], type, subjectId),
+      prog => {
+        if (!onProgress) return;
+        const scaledPct = Math.round(((idx + prog.aiPct / 100) / effectiveChunks.length) * 100);
+        onProgress({
+          ...prog,
+          aiPct: Math.min(99, Math.max(5, scaledPct)),
+          stepLabel: `${segmentLabel} — ${prog.stepLabel}`,
+        });
+      },
+      { signal, maxOutputTokens: 16384 }
+    );
+    allLists.push(part);
+  }
+
+  const merged = mergeExercises(allLists);
+  onProgress?.({
+    provider: 'Synthèse Multi-Segments',
+    model: `${effectiveChunks.length} segments fusionnés`,
+    aiPct: 100,
+    bytesReceived: text.length,
+    stepLabel: `${merged.length} élément(s) complet(s) extrait(s) et corrigé(s).`,
+  });
+  return merged;
 }
 
 export async function generateSimilarExercise(
@@ -1397,3 +1575,200 @@ Format JSON attendu :
     }
   );
 }
+
+export interface PracticeBatchParams {
+  type: 'td' | 'annale';
+  count: number;
+  subjectId: string;
+  subjectName: string;
+  difficulty: 1 | 2 | 3 | 'mixed';
+  topicPrompt: string;
+  sourceSheet?: StudySheet;
+  forceLocal?: boolean;
+  onProgress?: (progress: AIExtractionProgress) => void;
+  signal?: AbortSignal;
+}
+
+function localBuildPracticeBatch(params: PracticeBatchParams): Array<TDExercise | AnnaleItem> {
+  const { type, count, subjectId, subjectName, difficulty, topicPrompt, sourceSheet } = params;
+  const isAnnale = type === 'annale';
+  const formulas = sourceSheet?.magicFormulas || [];
+  const theorems = sourceSheet?.theorems || [];
+  const items: Array<TDExercise | AnnaleItem> = [];
+  const safeCount = Math.max(1, Math.min(8, count));
+
+  for (let i = 0; i < safeCount; i++) {
+    const fml = formulas[i % Math.max(1, formulas.length)];
+    const thm = theorems[i % Math.max(1, theorems.length)];
+    const diff: 1 | 2 | 3 = difficulty === 'mixed' ? (((i % 3) + 1) as 1 | 2 | 3) : difficulty;
+    const baseTopic = topicPrompt.trim() || sourceSheet?.chapter || subjectName;
+    const formulaText = fml ? `$$${fml.formula}$$` : 'les lois de conservation appropriées';
+
+    const base: TDExercise = {
+      id: `exo_batch_${Date.now()}_${i}`,
+      subjectId,
+      chapter: sourceSheet?.chapter || baseTopic,
+      title: isAnnale
+        ? `Problème ${i + 1} · ${fml?.name || baseTopic}`
+        : `Exercice ${i + 1} · ${fml?.name || baseTopic}`,
+      notion: thm?.name || fml?.name || baseTopic,
+      difficulty: diff,
+      statement: `Application guidée (${subjectName} — ${baseTopic}).\n1. Rappeler les hypothèses strictes de validité${thm ? ` de « ${thm.name} »` : ''}.\n2. Établir l'expression littérale à partir de ${formulaText}.\n3. Vérifier l'homogénéité dimensionnelle en unités SI.`,
+      hints: [
+        thm?.strictConditions?.[0]
+          ? `Vérifier d'abord l'hypothèse : ${thm.strictConditions[0]}.`
+          : 'Définir le système d’étude, le référentiel et les hypothèses de régime.',
+        fml?.unitsAndVariables
+          ? `Attention aux unités SI : ${fml.unitsAndVariables}.`
+          : 'Isoler l’inconnue littéralement avant toute application numérique.',
+      ],
+      solution: `Correction pas à pas :\n1. **Hypothèses** : ${thm?.strictConditions?.join(' ; ') || 'Régime permanent, référentiel galiléen, unités SI.'}\n2. **Relation maîtresse** : ${formulaText}\n3. **Explication physique** : ${fml?.validityDomain || 'Valide dans le domaine d’étude précisé au cours.'}\n4. **Contrôle dimensionnel** : Vérifier que chaque membre possède la même dimension SI.`,
+      status: 'todo',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (isAnnale) {
+      const annale: AnnaleItem = {
+        ...base,
+        session: `Entraînement ${subjectName}`,
+        year: new Date().getFullYear(),
+        durationMinutes: diff === 3 ? 90 : diff === 2 ? 60 : 45,
+        points: 20,
+        gradingCriteria: [
+          'Rappel rigoureux des hypothèses de validité : 4 pts',
+          'Développement littéral complet et formule exacte : 8 pts',
+          'Homogénéité dimensionnelle et unités SI : 4 pts',
+          'Commentaire physique et esprit critique : 4 pts',
+        ],
+      };
+      items.push(annale);
+    } else {
+      items.push(base);
+    }
+  }
+
+  return items;
+}
+
+/**
+ * Génère un lot complet d'exercices de TD ou d'annales avec corrections détaillées et explications pédagogiques
+ * en privilégiant les modèles légers, rapides et fiables (gemini-3.1-flash-lite / gemini-2.5-flash / relais rapides).
+ */
+export async function generatePracticeBatch(
+  params: PracticeBatchParams
+): Promise<Array<TDExercise | AnnaleItem>> {
+  throwIfAborted(params.signal);
+  const {
+    type,
+    count,
+    subjectId,
+    subjectName,
+    difficulty,
+    topicPrompt,
+    sourceSheet,
+    forceLocal = false,
+    onProgress,
+    signal,
+  } = params;
+  const safeCount = Math.max(1, Math.min(8, Math.round(count)));
+  const isAnnale = type === 'annale';
+
+  const difficultyLabel =
+    difficulty === 'mixed'
+      ? 'progressif (mélange Niveaux 1, 2 et 3 ESTACA)'
+      : `Niveau ${difficulty}/3`;
+
+  const sheetSummary = sourceSheet
+    ? `Fiche de référence : "${sourceSheet.title}" (Chapitre : ${sourceSheet.chapter})
+Théorèmes : ${sourceSheet.theorems.map(t => `${t.name}: ${t.statement}`).slice(0, 6).join(' | ')}
+Formules : ${sourceSheet.magicFormulas.map(f => `${f.name}: ${f.formula} (${f.unitsAndVariables})`).slice(0, 8).join(' | ')}`
+    : 'Aucune fiche source spécifique : appuie-toi strictement sur les lois canoniques du programme ESTACA.';
+
+  const systemPrompt = `Tu es un professeur et examinateur ESTACA (école d'ingénieurs aéronautique, spatial & automobile).
+Génère EXACTEMENT ${safeCount} ${isAnnale ? "sujets d'annales d'examen réalistes" : "exercices de TD complets"} en français, de niveau ${difficultyLabel}.
+
+EXIGENCES DE QUALITÉ ET ZÉRO HALLUCINATION :
+1. Utilise exclusivement des lois physiques/mathématiques exactes et cohérentes avec la matière "${subjectName}". Toutes les valeurs numériques données dans l'énoncé doivent permettre un calcul exact et cohérent dans la correction.
+2. Chaque élément DOIT contenir :
+   - Un énoncé structuré avec données numériques en unités SI (ou conversions classiques pièges : bar, km/h, °C, tr/min).
+   - 2 à 3 indices progressifs ("hints").
+   - Une "solution" ULTRA-DÉTAILLÉE étape par étape : 1) Hypothèses, 2) Schéma / Modélisation, 3) Démonstration littérale en LaTeX KaTeX ($...$ / $$...$$), 4) Application numérique détaillée, 5) Explication physique & commentaire critique sur l'ordre de grandeur.
+${isAnnale ? '3. Pour chaque annale, fournis aussi "session", "year", "durationMinutes", "points" et "gradingCriteria" (barème détaillé).' : ''}
+
+Format JSON strict :
+{
+  "exercises": [
+    {
+      "title": string,
+      "chapter": string,
+      "notion": string,
+      "difficulty": number (1, 2 ou 3),
+      "statement": string,
+      "hints": string[],
+      "solution": string${isAnnale ? `,
+      "session": string,
+      "year": number,
+      "durationMinutes": number,
+      "points": number,
+      "gradingCriteria": string[]` : ''}
+    }
+  ]
+}`;
+
+  const userPrompt = `Matière : ${subjectName}
+Thème / Consigne : ${topicPrompt.trim() || 'Programme fondamental complet du chapitre'}
+Nombre d'éléments à générer : ${safeCount}
+${sheetSummary}`;
+
+  return executeWithFallback<Array<TDExercise | AnnaleItem>>(
+    systemPrompt,
+    userPrompt,
+    (parsed) => {
+      const rawList = Array.isArray(parsed) ? parsed : (parsed.exercises || []);
+      return rawList.slice(0, safeCount).map((item: any, i: number) => {
+        const base: TDExercise = {
+          id: `exo_gen_${Date.now()}_${i}`,
+          subjectId,
+          chapter: item.chapter || sourceSheet?.chapter || 'Entraînement IA',
+          title: item.title || `${isAnnale ? 'Annale' : 'Exercice'} #${i + 1}`,
+          notion: item.notion || topicPrompt || 'Application',
+          difficulty: [1, 2, 3].includes(item.difficulty)
+            ? item.difficulty
+            : difficulty === 'mixed'
+            ? (((i % 3) + 1) as 1 | 2 | 3)
+            : difficulty,
+          statement: item.statement || '',
+          hints: Array.isArray(item.hints) ? item.hints : [],
+          solution: item.solution || 'Correction détaillée en cours.',
+          status: 'todo',
+          createdAt: new Date().toISOString(),
+        };
+
+        if (isAnnale) {
+          const annale: AnnaleItem = {
+            ...base,
+            session: item.session || 'Sujet Type ESTACA',
+            year: item.year || new Date().getFullYear(),
+            durationMinutes: item.durationMinutes || 90,
+            points: item.points || 20,
+            gradingCriteria: Array.isArray(item.gradingCriteria)
+              ? item.gradingCriteria
+              : [
+                  'Hypothèses et modélisation : 4 pts',
+                  'Résolution littérale rigoureuse : 8 pts',
+                  'Calcul numérique et unités SI : 5 pts',
+                  'Interprétation physique : 3 pts',
+                ],
+          };
+          return annale;
+        }
+        return base;
+      });
+    },
+    forceLocal,
+    () => localBuildPracticeBatch(params),
+    onProgress,
+    { signal, preferLightFastModel: true, maxOutputTokens: 16384 }
+  );
+}
+

@@ -85,7 +85,23 @@ const SERVER_GEMINI_FALLBACK_ORDER = [
   'gemini-2.5-flash',
 ] as const;
 
-function resolveServerGeminiModels(requested: unknown, allowCascade: boolean): string[] {
+const SERVER_GEMINI_LIGHT_ORDER = [
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-4-hydrogen',
+] as const;
+
+function resolveServerGeminiModels(
+  requested: unknown,
+  allowCascade: boolean,
+  preferLightFastModel = false
+): string[] {
+  if (preferLightFastModel) {
+    if (!allowCascade) {
+      return [SERVER_GEMINI_LIGHT_ORDER[0]];
+    }
+    return [...SERVER_GEMINI_LIGHT_ORDER];
+  }
   const primary = resolveServerGeminiModel(requested);
   if (!allowCascade) {
     return [primary];
@@ -142,7 +158,12 @@ async function startServer() {
   app.post('/api/gemini/generate', async (req: Request, res: Response) => {
     const ai = getGeminiClient();
     const allowCascade = req.body?.cascadeModels !== false;
-    const candidateModels = resolveServerGeminiModels(req.body?.model, allowCascade);
+    const preferLightFastModel = req.body?.preferLightFastModel === true;
+    const candidateModels = resolveServerGeminiModels(
+      req.body?.model,
+      allowCascade,
+      preferLightFastModel
+    );
 
     if (!ai) {
       res.status(503).json({
@@ -164,7 +185,14 @@ async function startServer() {
       return;
     }
 
+    const requestedMaxTokens = Number(req.body?.maxOutputTokens);
+    const maxOutputTokens =
+      Number.isFinite(requestedMaxTokens) && requestedMaxTokens >= 1024 && requestedMaxTokens <= 32768
+        ? Math.round(requestedMaxTokens)
+        : 16384;
+
     const config: Record<string, unknown> = {
+      maxOutputTokens,
       responseMimeType:
         typeof req.body?.responseMimeType === 'string' && req.body.responseMimeType.trim()
           ? req.body.responseMimeType.trim()
@@ -215,7 +243,12 @@ async function startServer() {
   app.post('/api/gemini/stream', async (req: Request, res: Response) => {
     const ai = getGeminiClient();
     const allowCascade = req.body?.cascadeModels !== false;
-    const candidateModels = resolveServerGeminiModels(req.body?.model, allowCascade);
+    const preferLightFastModel = req.body?.preferLightFastModel === true;
+    const candidateModels = resolveServerGeminiModels(
+      req.body?.model,
+      allowCascade,
+      preferLightFastModel
+    );
 
     if (!ai) {
       res.status(503).json({
@@ -237,7 +270,15 @@ async function startServer() {
       return;
     }
 
-    const config: Record<string, unknown> = {};
+    const requestedMaxTokens = Number(req.body?.maxOutputTokens);
+    const maxOutputTokens =
+      Number.isFinite(requestedMaxTokens) && requestedMaxTokens >= 1024 && requestedMaxTokens <= 32768
+        ? Math.round(requestedMaxTokens)
+        : 16384;
+
+    const config: Record<string, unknown> = {
+      maxOutputTokens,
+    };
     if (typeof req.body?.systemPrompt === 'string' && req.body.systemPrompt.trim()) {
       config.systemInstruction = req.body.systemPrompt.trim();
     }

@@ -9,6 +9,8 @@ import {
   BookOpen,
   Loader2,
   Trash2,
+  Wand2,
+  Zap,
 } from 'lucide-react';
 import { TDExercise, ExerciseStatus, DifficultyLevel } from '../../types/course';
 import { MathView } from '../common/MathView';
@@ -20,6 +22,8 @@ interface TDSectionProps {
   onUpdateExercise: (exercise: TDExercise) => void;
   onAddExercise: (exercise: TDExercise) => void;
   onDeleteExercise: (id: string) => void;
+  onOpenPracticeBatch?: () => void;
+  onSelectKatexForRepair?: (snippet: string, scopeType: 'td', scopeId: string) => void;
 }
 
 export const TDSection: React.FC<TDSectionProps> = ({
@@ -28,11 +32,14 @@ export const TDSection: React.FC<TDSectionProps> = ({
   onUpdateExercise,
   onAddExercise,
   onDeleteExercise,
+  onOpenPracticeBatch,
+  onSelectKatexForRepair,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedChapter, setSelectedChapter] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<ExerciseStatus | 'all'>('all');
+  const [katexSelectMode, setKatexSelectMode] = useState(false);
 
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [revealedHints, setRevealedHints] = useState<Record<string, number>>({});
@@ -170,6 +177,34 @@ export const TDSection: React.FC<TDSectionProps> = ({
               </button>
             ))}
           </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setKatexSelectMode(!katexSelectMode)}
+              aria-pressed={katexSelectMode}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap border ${
+                katexSelectMode
+                  ? 'bg-amber-500 text-[#04060C] border-amber-400'
+                  : 'bg-[#04060C] text-slate-200 border-white/[0.1] hover:border-amber-400/40'
+              }`}
+              title="Cliquez sur n'importe quelle formule pour la réparer en place"
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>{katexSelectMode ? 'Cliquez sur une formule' : 'Cibler KaTeX'}</span>
+            </button>
+
+            {onOpenPracticeBatch && (
+              <button
+                type="button"
+                onClick={onOpenPracticeBatch}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-[#04060C] text-xs font-bold transition-colors whitespace-nowrap cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Générer pack d&apos;exercices IA</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -194,6 +229,10 @@ export const TDSection: React.FC<TDSectionProps> = ({
             return (
               <article
                 key={exercise.id}
+                data-katex-repair-scope="true"
+                data-scope-type="td"
+                data-scope-id={exercise.id}
+                data-katex-select-mode={katexSelectMode ? 'true' : 'false'}
                 className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors hover:border-white/[0.15]"
               >
                 <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0D1322]/60 border-b border-white/[0.06]">
@@ -277,7 +316,13 @@ export const TDSection: React.FC<TDSectionProps> = ({
                 {isExpanded && (
                   <div className="p-5 space-y-4">
                     <div className="text-xs text-slate-200 leading-relaxed bg-[#04060C] p-4 rounded-xl border border-white/[0.07] whitespace-pre-wrap select-text">
-                      <MathView math={exercise.statement} />
+                      <MathView
+                        math={exercise.statement}
+                        onOpenRepair={snippet => {
+                          setKatexSelectMode(false);
+                          onSelectKatexForRepair?.(snippet, 'td', exercise.id);
+                        }}
+                      />
                     </div>
 
                     {hintCount > 0 && (
@@ -310,7 +355,13 @@ export const TDSection: React.FC<TDSectionProps> = ({
                               >
                                 <span className="font-bold text-amber-400 font-mono">0{hIdx + 1}</span>
                                 <div className="flex-1 leading-relaxed">
-                                  <MathView math={hint} />
+                                  <MathView
+                                    math={hint}
+                                    onOpenRepair={snippet => {
+                                      setKatexSelectMode(false);
+                                      onSelectKatexForRepair?.(snippet, 'td', exercise.id);
+                                    }}
+                                  />
                                 </div>
                               </div>
                             ))}
@@ -339,7 +390,13 @@ export const TDSection: React.FC<TDSectionProps> = ({
 
                       {isSolutionVisible && (
                         <div className="mt-3 p-4 rounded-xl bg-[#04060C] border border-emerald-400/25 text-xs text-slate-200 space-y-2 whitespace-pre-wrap select-text animate-fade-in leading-relaxed">
-                          <MathView math={exercise.solution} />
+                          <MathView
+                            math={exercise.solution}
+                            onOpenRepair={snippet => {
+                              setKatexSelectMode(false);
+                              onSelectKatexForRepair?.(snippet, 'td', exercise.id);
+                            }}
+                          />
                         </div>
                       )}
                     </div>

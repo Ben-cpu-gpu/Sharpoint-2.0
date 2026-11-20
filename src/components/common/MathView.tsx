@@ -14,7 +14,8 @@ interface MathViewProps {
  * Composant de rendu mathématique LaTeX sécurisé avec KaTeX.
  * Gère les formules pures, les textes mixtes avec délimiteurs $...$ / $$...$$,
  * et les phrases mixtes contenant des fragments LaTeX sans délimiteurs.
- * En cas d'erreur de rendu KaTeX, propose un badge cliquable pour lancer l'Assistant de Réparation IA.
+ * - Détecte fidèlement toute erreur KaTeX (throwOnError: true) pour afficher le bouton cliquable `✨ Réparer`.
+ * - Expose `data-raw-math` sur chaque formule rendue pour permettre la sélection directe au clic ou au surlignage.
  */
 export const MathView: React.FC<MathViewProps> = ({
   math,
@@ -26,39 +27,53 @@ export const MathView: React.FC<MathViewProps> = ({
   const content = math || children || '';
   if (!content) return null;
 
-  const renderFormula = (latex: string, displayMode: boolean): string => {
+  const renderFormula = (latex: string, displayMode: boolean): { html: string; hasError: boolean } => {
     try {
-      return katex.renderToString(latex, {
+      const html = katex.renderToString(latex, {
         displayMode,
-        throwOnError: false,
+        throwOnError: true,
         strict: false,
         trust: true,
       });
+      return { html, hasError: false };
     } catch (err: any) {
       console.warn('Erreur de syntaxe KaTeX interceptée :', err);
       const encoded = encodeURIComponent(latex);
-      return `<span role="button" tabindex="0" title="Formule KaTeX incorrecte — Cliquez pour la réparer avec l'Assistant IA" class="cursor-pointer text-amber-300 font-mono text-sm bg-amber-950/60 hover:bg-amber-900/80 px-2 py-0.5 rounded border border-amber-500/60 inline-flex items-center gap-1.5 transition-colors katex-repair-trigger shadow-sm" data-latex="${encoded}"><span class="text-amber-400 font-bold">✨ Réparer</span><span>${latex.replace(/</g, '&lt;')}</span></span>`;
+      const escaped = latex.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = `<span role="button" tabindex="0" title="Formule KaTeX incorrecte — Cliquez pour la réparer avec l'Assistant IA" class="cursor-pointer text-amber-300 font-mono text-sm bg-amber-950/60 hover:bg-amber-900/80 px-2 py-0.5 rounded border border-amber-500/60 inline-flex items-center gap-1.5 transition-colors katex-repair-trigger shadow-sm" data-latex="${encoded}"><span class="text-amber-400 font-bold">✨ Réparer</span><span>${escaped}</span></span>`;
+      return { html, hasError: true };
     }
   };
 
   const segments = parseMathContent(content, block);
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement | HTMLSpanElement>) => {
+    if (!onOpenRepair) return;
     const target = (e.target as HTMLElement).closest('.katex-repair-trigger');
-    if (target && onOpenRepair) {
+    if (target) {
       const rawLatex = target.getAttribute('data-latex');
       if (rawLatex) {
         onOpenRepair(decodeURIComponent(rawLatex));
+      }
+      return;
+    }
+    const selectScope = (e.target as HTMLElement).closest('[data-katex-select-mode="true"]');
+    if (selectScope) {
+      const formulaNode = (e.target as HTMLElement).closest('.katex-formula-node');
+      const rawMath = formulaNode?.getAttribute('data-raw-math');
+      if (rawMath) {
+        onOpenRepair(rawMath);
       }
     }
   };
 
   if (segments.length === 1 && segments[0].type === 'block-math') {
-    const html = renderFormula(segments[0].value, true);
+    const { html } = renderFormula(segments[0].value, true);
     return (
       <div
         onClick={handleClick}
-        className={`my-2 overflow-x-auto py-1 text-center select-text ${className}`}
+        data-raw-math={segments[0].value}
+        className={`katex-formula-node my-2 overflow-x-auto py-1 text-center select-text ${className}`}
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
@@ -75,20 +90,22 @@ export const MathView: React.FC<MathViewProps> = ({
           return <React.Fragment key={`txt_${idx}`}>{seg.value}</React.Fragment>;
         }
         if (seg.type === 'block-math') {
-          const html = renderFormula(seg.value, true);
+          const { html } = renderFormula(seg.value, true);
           return (
             <div
               key={`mb_${idx}`}
-              className="my-2 overflow-x-auto select-text text-center"
+              data-raw-math={seg.value}
+              className="katex-formula-node my-2 overflow-x-auto select-text text-center"
               dangerouslySetInnerHTML={{ __html: html }}
             />
           );
         }
-        const html = renderFormula(seg.value, false);
+        const { html } = renderFormula(seg.value, false);
         return (
           <span
             key={`mi_${idx}`}
-            className="inline-block px-0.5 align-baseline select-text"
+            data-raw-math={seg.value}
+            className="katex-formula-node inline-block px-0.5 align-baseline select-text"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         );

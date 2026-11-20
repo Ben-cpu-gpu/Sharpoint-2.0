@@ -116,3 +116,18 @@ test('getCandidateModelsForProvider cascades across backup models for each provi
     'google/gemma-3-27b-it:free',
   ]);
 });
+
+test('getCandidateModelsForProvider prioritizes lighter fast reliable models when preferLightFastModel is true', () => {
+  assert.deepEqual(getCandidateModelsForProvider('gemini', 'gemini-4-hydrogen', true), [
+    'gemini-3.1-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-4-hydrogen',
+    'gemini-2.5-pro',
+  ]);
+  assert.deepEqual(getCandidateModelsForProvider('groq', 'llama-3.3-70b-versatile', true), [
+    'llama-3.1-8b-instant',
+    'qwen/qwen3-32b',
+    'llama-3.3-70b-versatile',
+  ]);
+});
+
