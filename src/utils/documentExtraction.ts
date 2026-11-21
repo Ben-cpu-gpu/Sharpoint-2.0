@@ -287,6 +287,8 @@ export function patchTextInSheet(
     return res.value;
   };
 
+  const subtitle = tryReplace(sheet.subtitle);
+
   const theorems = sheet.theorems.map(t => ({
     ...t,
     statement: tryReplace(t.statement),
@@ -328,6 +330,7 @@ export function patchTextInSheet(
   return {
     sheet: {
       ...sheet,
+      subtitle,
       theorems,
       magicFormulas,
       stepByStepMethods,

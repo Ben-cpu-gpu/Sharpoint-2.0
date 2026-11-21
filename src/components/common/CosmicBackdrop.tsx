@@ -394,13 +394,13 @@ export const CosmicBackdrop: React.FC<CosmicBackdropProps> = ({ focusMode = fals
       aria-hidden="true"
       className="fixed inset-0 pointer-events-none overflow-hidden z-0"
     >
-      {/* Deep Space Obsidian & Distant Singularity Halo */}
+      {/* Deep Night-Blue / Black Space with Violet Cosmic Nuances */}
       <div
         className="absolute inset-0"
         style={{
           background: focusMode
-            ? 'radial-gradient(circle at 80% 15%, rgba(15, 23, 42, 0.28) 0%, #04060C 62%)'
-            : 'radial-gradient(circle at 84% 16%, rgba(245, 158, 11, 0.09) 0%, rgba(15, 23, 42, 0.35) 28%, rgba(4, 6, 12, 0.96) 66%), radial-gradient(circle at 12% 88%, rgba(56, 189, 248, 0.06) 0%, transparent 45%)',
+            ? 'radial-gradient(circle at 80% 15%, rgba(30, 27, 75, 0.34) 0%, #03050C 64%)'
+            : 'radial-gradient(circle at 78% 18%, rgba(139, 92, 246, 0.16) 0%, rgba(30, 27, 75, 0.42) 32%, rgba(4, 6, 16, 0.96) 72%), radial-gradient(circle at 18% 82%, rgba(56, 189, 248, 0.11) 0%, rgba(124, 58, 237, 0.08) 28%, transparent 55%), linear-gradient(160deg, #02030A 0%, #070B1E 52%, #0B061D 100%)',
         }}
       />
 

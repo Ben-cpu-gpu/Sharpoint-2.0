@@ -11,19 +11,27 @@ interface KatexRepairModalProps {
   onFixed?: (fixedLatex: string, originalSnippet: string) => void;
 }
 
-function localHeuristicKatexFix(raw: string): string {
-  let cleaned = raw.trim();
-  // Corrige les indices multi-caractères sans accolades (ex: _Gz -> _{Gz}, C_z0 -> C_{z0})
+function balanceLatexSegment(segment: string): string {
+  let cleaned = segment.trim();
   if (!cleaned.includes('_{') && /_[A-Za-z0-9]{2,}/.test(cleaned)) {
     cleaned = cleaned.replace(/_([A-Za-z0-9]{2,})/g, '_{$1}');
   }
-  // Ferme automatiquement les accolades manquantes
   const openCount = (cleaned.match(/\{/g) || []).length;
   const closeCount = (cleaned.match(/\}/g) || []).length;
   if (openCount > closeCount) {
     cleaned += '}'.repeat(openCount - closeCount);
   }
   return cleaned;
+}
+
+function localHeuristicKatexFix(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.includes('$')) {
+    return trimmed
+      .replace(/\$\$([\s\S]*?)\$\$/g, (_, inner) => `$$${balanceLatexSegment(inner)}$$`)
+      .replace(/(?<!\$)\$(?!\$)([^\n$]+?)(?<!\$)\$(?!\$)/g, (_, inner) => `$${balanceLatexSegment(inner)}$`);
+  }
+  return balanceLatexSegment(trimmed);
 }
 
 export const KatexRepairModal: React.FC<KatexRepairModalProps> = ({
@@ -218,7 +226,7 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
 
               {/* Rendu visuel instantané */}
               <div className="p-4 rounded-xl bg-[#070B14] border border-white/[0.08] text-center overflow-x-auto">
-                <MathView block>{fixedResult.fixedLatex}</MathView>
+                <MathView block repairEnabled={false}>{fixedResult.fixedLatex}</MathView>
               </div>
 
               <div className="space-y-1 font-mono text-[11px]">

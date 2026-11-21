@@ -21,6 +21,7 @@ import { PracticeBatchModal } from './components/common/PracticeBatchModal';
 import { SolarSystemNav } from './components/common/SolarSystemNav';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
 import { CloudSyncState, MobileAuthError } from './components/common/CloudSyncControl';
+import { KatexRepairProvider } from './contexts/KatexRepairContext';
 import { SheetViewer } from './components/sheets/SheetViewer';
 import { SheetEditor } from './components/sheets/SheetEditor';
 import { RevisionModal } from './components/sheets/RevisionModal';
@@ -141,6 +142,14 @@ export const App: React.FC = () => {
     });
   };
 
+  const [katexRepairMode, setKatexRepairMode] = useState(false);
+  const katexRepairModeRef = useRef(katexRepairMode);
+  katexRepairModeRef.current = katexRepairMode;
+
+  const toggleKatexRepairMode = () => {
+    setKatexRepairMode(prev => !prev);
+  };
+
   const openScopedKatexRepair = (
     snippet: string,
     scopeType: 'sheet' | 'td' | 'annale',
@@ -162,6 +171,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const handleGlobalKatexClick = (e: MouseEvent) => {
+      if (!katexRepairModeRef.current) return;
       const target = (e.target as HTMLElement).closest('.katex-repair-trigger');
       if (target) {
         const rawLatex = target.getAttribute('data-latex');
@@ -810,6 +820,18 @@ export const App: React.FC = () => {
 
   return (
     <ErrorBoundary>
+      <KatexRepairProvider
+        value={{
+          katexRepairMode,
+          setKatexRepairMode,
+          toggleKatexRepairMode,
+          onOpenKatexModal: (initialLatex = '') => {
+            setRepairKatexInitial(initialLatex);
+            setRepairKatexTarget(null);
+            setIsKatexRepairOpen(true);
+          },
+        }}
+      >
       <div className="relative min-h-screen bg-[#04060C] text-slate-100 flex flex-col font-sans pb-20 md:pb-8 overflow-x-clip">
         <CosmicBackdrop focusMode={focusMode} />
         <GalacticTouchVFX disabled={focusMode} />
@@ -820,6 +842,8 @@ export const App: React.FC = () => {
             onTabChange={setCurrentTab}
             onOpenIngest={() => setIsIngestionOpen(true)}
             onOpenSettings={() => handleOpenDashboard()}
+            katexRepairMode={katexRepairMode}
+            onToggleKatexRepairMode={toggleKatexRepairMode}
             onOpenKatexRepair={() => {
               setRepairKatexInitial('');
               setRepairKatexTarget(null);
@@ -1203,6 +1227,7 @@ export const App: React.FC = () => {
         )}
 
         <SelectionRepairBar
+          enabled={katexRepairMode}
           onRepairSelection={(target: SelectedKatexTarget) => {
             openScopedKatexRepair(target.snippet, target.scopeType, target.scopeId);
           }}
@@ -1252,11 +1277,49 @@ export const App: React.FC = () => {
                   }
                 }
               }
-            } else if (snippetToFind && resolvedActiveSheet && currentTab === 'sheets') {
-              const res = patchTextInSheet(resolvedActiveSheet, snippetToFind, fixedLatex);
-              if (res.replaced) {
-                handleUpdateSheet(res.sheet);
-                appliedInPlace = true;
+            } else if (snippetToFind) {
+              if (resolvedActiveSheet && currentTab === 'sheets') {
+                const res = patchTextInSheet(resolvedActiveSheet, snippetToFind, fixedLatex);
+                if (res.replaced) {
+                  handleUpdateSheet(res.sheet);
+                  appliedInPlace = true;
+                }
+              }
+              if (!appliedInPlace) {
+                for (const s of sheets) {
+                  const res = patchTextInSheet(s, snippetToFind, fixedLatex);
+                  if (res.replaced) {
+                    handleUpdateSheet(res.sheet);
+                    appliedInPlace = true;
+                    break;
+                  }
+                }
+              }
+              if (!appliedInPlace) {
+                for (const ex of tdExercises) {
+                  const res = patchTextInExercise(ex, snippetToFind, fixedLatex);
+                  if (res.replaced) {
+                    const next = tdExercises.map(e => (e.id === res.item.id ? res.item : e));
+                    setTdExercises(next);
+                    saveAppData(sheets, next, annales);
+                    if (cloudUser) runCloudTask(upsertTDExerciseInCloud(cloudUser.uid, res.item));
+                    appliedInPlace = true;
+                    break;
+                  }
+                }
+              }
+              if (!appliedInPlace) {
+                for (const an of annales) {
+                  const res = patchTextInExercise(an, snippetToFind, fixedLatex);
+                  if (res.replaced) {
+                    const next = annales.map(a => (a.id === res.item.id ? res.item : a));
+                    setAnnales(next);
+                    saveAppData(sheets, tdExercises, next);
+                    if (cloudUser) runCloudTask(upsertAnnaleInCloud(cloudUser.uid, res.item));
+                    appliedInPlace = true;
+                    break;
+                  }
+                }
               }
             }
 
@@ -1294,6 +1357,7 @@ export const App: React.FC = () => {
 
         <DebugDrawer />
       </div>
+      </KatexRepairProvider>
     </ErrorBoundary>
   );
 };

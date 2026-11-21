@@ -18,6 +18,7 @@ import { AnnaleItem, ExerciseStatus, DifficultyLevel } from '../../types/course'
 import { MathView } from '../common/MathView';
 import { generateSimilarExercise } from '../../services/aiService';
 import { ExamTimerModal } from './ExamTimerModal';
+import { useKatexRepairContext } from '../../contexts/KatexRepairContext';
 
 interface AnnalesSectionProps {
   annales: AnnaleItem[];
@@ -43,7 +44,7 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
   const [selectedSession, setSelectedSession] = useState<string>('all');
   const [selectedDifficulty, setSelectedDifficulty] = useState<DifficultyLevel | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<ExerciseStatus | 'all'>('all');
-  const [katexSelectMode, setKatexSelectMode] = useState(false);
+  const { katexRepairMode, toggleKatexRepairMode, onOpenKatexModal } = useKatexRepairContext();
 
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [revealedHints, setRevealedHints] = useState<Record<string, number>>({});
@@ -213,18 +214,42 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setKatexSelectMode(!katexSelectMode)}
-              aria-pressed={katexSelectMode}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap border ${
-                katexSelectMode
-                  ? 'bg-amber-500 text-[#04060C] border-amber-400'
-                  : 'bg-[#04060C] text-slate-200 border-white/[0.1] hover:border-amber-400/40'
+              role="switch"
+              aria-checked={katexRepairMode}
+              onClick={toggleKatexRepairMode}
+              aria-label="Interrupteur mode ciblage et réparation KaTeX"
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap border cursor-pointer ${
+                katexRepairMode
+                  ? 'bg-amber-500/18 text-amber-200 border-amber-400/55'
+                  : 'bg-[#04060C] text-slate-300 border-white/[0.1] hover:border-amber-400/40'
               }`}
-              title="Cliquez sur n'importe quelle formule pour la réparer en place"
             >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>{katexSelectMode ? 'Cliquez sur une formule' : 'Cibler KaTeX'}</span>
+              <span
+                aria-hidden="true"
+                className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                  katexRepairMode ? 'bg-amber-500' : 'bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                    katexRepairMode ? 'translate-x-3.5' : 'translate-x-0.5'
+                  }`}
+                />
+              </span>
+              <span>Mode KaTeX</span>
             </button>
+
+            {katexRepairMode && (
+              <button
+                type="button"
+                onClick={() => onOpenKatexModal('')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 border border-amber-300 text-[#04060C] text-xs font-bold transition-colors whitespace-nowrap cursor-pointer animate-fade-in"
+                title="Cliquez sur n'importe quelle formule ou ouvrez le réparateur KaTeX"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                <span>Cibler / Réparer</span>
+              </button>
+            )}
 
             {onOpenPracticeBatch && (
               <button
@@ -264,7 +289,7 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                 data-katex-repair-scope="true"
                 data-scope-type="annale"
                 data-scope-id={annale.id}
-                data-katex-select-mode={katexSelectMode ? 'true' : 'false'}
+                data-katex-select-mode={katexRepairMode ? 'true' : 'false'}
                 className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors hover:border-white/[0.15]"
               >
                 <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[#0D1322]/60 border-b border-white/[0.06]">
@@ -355,7 +380,6 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                       <MathView
                         math={annale.statement}
                         onOpenRepair={snippet => {
-                          setKatexSelectMode(false);
                           onSelectKatexForRepair?.(snippet, 'annale', annale.id);
                         }}
                       />
@@ -373,7 +397,6 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                               <span className="font-mono text-sky-400">0{cIdx + 1}</span>
                               <MathView
                                 onOpenRepair={snippet => {
-                                  setKatexSelectMode(false);
                                   onSelectKatexForRepair?.(snippet, 'annale', annale.id);
                                 }}
                               >
@@ -418,7 +441,6 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                                   <MathView
                                     math={hint}
                                     onOpenRepair={snippet => {
-                                      setKatexSelectMode(false);
                                       onSelectKatexForRepair?.(snippet, 'annale', annale.id);
                                     }}
                                   />
@@ -451,7 +473,6 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                           <MathView
                             math={annale.solution}
                             onOpenRepair={snippet => {
-                              setKatexSelectMode(false);
                               onSelectKatexForRepair?.(snippet, 'annale', annale.id);
                             }}
                           />

@@ -8,6 +8,7 @@ export interface SelectedKatexTarget {
 }
 
 interface SelectionRepairBarProps {
+  enabled: boolean;
   onRepairSelection: (target: SelectedKatexTarget) => void;
 }
 
@@ -23,15 +24,24 @@ function getElementFromNode(node: Node | null): HTMLElement | null {
 }
 
 /**
- * Barre flottante contextuelle : lorsqu'un utilisateur sélectionne une formule ou du texte LaTeX
- * dans une fiche, un TD ou une annale, propose de l'envoyer directement à l'Assistant KaTeX
- * pour le réparer et l'appliquer en place.
+ * Barre flottante contextuelle : uniquement lorsque l'interrupteur KaTeX est activé,
+ * si l'utilisateur sélectionne une formule ou du texte LaTeX dans une fiche, un TD ou une annale,
+ * propose de l'envoyer directement à l'Assistant KaTeX pour le réparer et l'appliquer en place.
  */
-export const SelectionRepairBar: React.FC<SelectionRepairBarProps> = ({ onRepairSelection }) => {
+export const SelectionRepairBar: React.FC<SelectionRepairBarProps> = ({
+  enabled,
+  onRepairSelection,
+}) => {
   const [target, setTarget] = useState<SelectedKatexTarget | null>(null);
   const [pos, setPos] = useState<FloatingPos | null>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      setTarget(null);
+      setPos(null);
+      return;
+    }
+
     const updateFromSelection = () => {
       const sel = window.getSelection();
       if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
@@ -100,7 +110,7 @@ export const SelectionRepairBar: React.FC<SelectionRepairBarProps> = ({ onRepair
       document.removeEventListener('touchend', handlePointerUp);
       document.removeEventListener('keyup', handlePointerUp);
     };
-  }, []);
+  }, [enabled]);
 
   if (!target || !pos) return null;
 

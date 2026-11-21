@@ -259,7 +259,7 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
     <section
       aria-label="Observatoire du Système Solaire et Tableau de Bord IA"
       className={`rounded-2xl border border-white/[0.09] overflow-hidden shadow-[0_24px_60px_-28px_rgba(0,0,0,0.9)] ${
-        focusMode ? 'bg-[#070B14]/96' : 'bg-[#070B14]/76'
+        focusMode ? 'bg-[#070B14]/96' : 'bg-[#070B14]/48 backdrop-blur-[1.5px]'
       }`}
     >
       {/* Barre supérieure compacte de l'observatoire */}

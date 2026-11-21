@@ -354,8 +354,8 @@ export function parseMathContent(content: string, block = false): MathSegment[] 
     trimmed.length > 4 &&
     trimmed.indexOf('$$', 2) === trimmed.length - 2;
 
-  if (block || isSingleWrappedBlock) {
-    const cleanFormula = isSingleWrappedBlock ? trimmed.slice(2, -2).trim() : trimmed;
+  if (isSingleWrappedBlock) {
+    const cleanFormula = trimmed.slice(2, -2).trim();
     return [{ type: 'block-math', value: cleanFormula }];
   }
 
@@ -385,12 +385,22 @@ export function parseMathContent(content: string, block = false): MathSegment[] 
   }
 
   if (isPureFormulaWithoutDelimiters(content)) {
-    return [{ type: 'inline-math', value: normalizeBareScripts(trimmed) }];
+    return [{ type: block ? 'block-math' : 'inline-math', value: normalizeBareScripts(trimmed) }];
   }
 
   if (/[\\^_]/.test(content)) {
-    return extractInlineMathFromProse(content);
+    const extracted = extractInlineMathFromProse(content);
+    if (block && extracted.length === 1 && extracted[0].type === 'inline-math') {
+      return [{ type: 'block-math', value: extracted[0].value }];
+    }
+    return extracted;
   }
 
-  return [{ type: 'text', value: content }];
+  const looksLikeBareEquation =
+    block &&
+    /[=\\^_+\-*/<>]/.test(trimmed) &&
+    !/[àâäéèêëîïôöùûüçÀÂÄÉÈÊËÎÏÔÖÙÛÜÇ]/.test(trimmed) &&
+    !/\b(le|la|les|des|une|est|sont|pour|dans|avec|sans)\b/i.test(trimmed);
+
+  return [{ type: looksLikeBareEquation ? 'block-math' : 'text', value: looksLikeBareEquation ? trimmed : content }];
 }

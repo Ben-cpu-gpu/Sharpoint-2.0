@@ -1,12 +1,14 @@
 import React from 'react';
 import katex from 'katex';
 import { parseMathContent } from '../../utils/mathParser';
+import { useKatexRepairContext } from '../../contexts/KatexRepairContext';
 
 interface MathViewProps {
   math?: string;
   children?: string;
   block?: boolean;
   className?: string;
+  repairEnabled?: boolean;
   onOpenRepair?: (brokenLatex: string) => void;
 }
 
@@ -14,16 +16,21 @@ interface MathViewProps {
  * Composant de rendu mathématique LaTeX sécurisé avec KaTeX.
  * Gère les formules pures, les textes mixtes avec délimiteurs $...$ / $$...$$,
  * et les phrases mixtes contenant des fragments LaTeX sans délimiteurs.
- * - Détecte fidèlement toute erreur KaTeX (throwOnError: true) pour afficher le bouton cliquable `✨ Réparer`.
- * - Expose `data-raw-math` sur chaque formule rendue pour permettre la sélection directe au clic ou au surlignage.
+ * - Détecte fidèlement toute erreur KaTeX (throwOnError: true).
+ * - N'affiche le déclencheur cliquable `✨ Réparer` et le ciblage direct
+ *   que lorsque l'interrupteur Mode KaTeX est activé.
  */
 export const MathView: React.FC<MathViewProps> = ({
   math,
   children,
   block = false,
   className = '',
+  repairEnabled,
   onOpenRepair,
 }) => {
+  const { katexRepairMode } = useKatexRepairContext();
+  const isRepairActive = repairEnabled ?? katexRepairMode;
+
   const content = math || children || '';
   if (!content) return null;
 
@@ -40,6 +47,10 @@ export const MathView: React.FC<MathViewProps> = ({
       console.warn('Erreur de syntaxe KaTeX interceptée :', err);
       const encoded = encodeURIComponent(latex);
       const escaped = latex.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      if (!isRepairActive) {
+        const cleanHtml = `<code class="font-mono text-xs text-slate-300 bg-white/[0.04] px-1.5 py-0.5 rounded border border-white/[0.08]">${escaped}</code>`;
+        return { html: cleanHtml, hasError: true };
+      }
       const html = `<span role="button" tabindex="0" title="Formule KaTeX incorrecte — Cliquez pour la réparer avec l'Assistant IA" class="cursor-pointer text-amber-300 font-mono text-sm bg-amber-950/60 hover:bg-amber-900/80 px-2 py-0.5 rounded border border-amber-500/60 inline-flex items-center gap-1.5 transition-colors katex-repair-trigger shadow-sm" data-latex="${encoded}"><span class="text-amber-400 font-bold">✨ Réparer</span><span>${escaped}</span></span>`;
       return { html, hasError: true };
     }
@@ -48,7 +59,7 @@ export const MathView: React.FC<MathViewProps> = ({
   const segments = parseMathContent(content, block);
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement | HTMLSpanElement>) => {
-    if (!onOpenRepair) return;
+    if (!onOpenRepair || !isRepairActive) return;
     const target = (e.target as HTMLElement).closest('.katex-repair-trigger');
     if (target) {
       const rawLatex = target.getAttribute('data-latex');

@@ -49,6 +49,8 @@ interface HeaderProps {
   onRetryRedirectSignIn: () => Promise<void>;
   focusMode: boolean;
   onToggleFocusMode: () => void;
+  katexRepairMode: boolean;
+  onToggleKatexRepairMode: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -74,6 +76,8 @@ export const Header: React.FC<HeaderProps> = ({
   onRetryRedirectSignIn,
   focusMode,
   onToggleFocusMode,
+  katexRepairMode,
+  onToggleKatexRepairMode,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentModelId = getSelectedModel();
@@ -93,13 +97,13 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="sticky top-0 z-30 w-full bg-[#04060C]/92 border-b border-white/[0.08]">
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-5 lg:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-3 lg:gap-4 min-w-0">
+      <div className="max-w-[1440px] mx-auto px-2.5 sm:px-4 lg:px-5 h-14 sm:h-16 flex items-center justify-between gap-1.5 sm:gap-2 lg:gap-3 min-w-0">
         {/* Zone 1: Brand Singularity Wordmark */}
-        <div className="flex items-center gap-2 shrink-0 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
           <svg
             aria-hidden="true"
             viewBox="0 0 36 36"
-            className="w-7 h-7 sm:w-8 sm:h-8 shrink-0"
+            className="w-6 h-6 sm:w-8 sm:h-8 shrink-0"
             fill="none"
           >
             <defs>
@@ -121,13 +125,13 @@ export const Header: React.FC<HeaderProps> = ({
             />
             <circle cx="18" cy="18" r="7.5" fill="#04060C" stroke="#F59E0B" strokeOpacity="0.45" strokeWidth="1" />
           </svg>
-          <span className="font-display text-sm sm:text-base lg:text-lg font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
+          <span className="font-display text-xs sm:text-base lg:text-lg font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
             FicheMaster <span className="text-amber-400">IA</span>
           </span>
         </div>
 
         {/* Zone 2: Primary Navigation Tabs (md+ while MobileBottomNav handles <md) */}
-        <nav aria-label="Navigation principale" className="hidden md:flex items-center gap-3 lg:gap-5 shrink-0">
+        <nav aria-label="Navigation principale" className="hidden md:flex items-center gap-2.5 xl:gap-4 shrink-0">
           <button
             type="button"
             onClick={() => onTabChange('sheets')}
@@ -138,8 +142,8 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <BookOpen className="w-3.5 h-3.5" />
-            <span className="lg:hidden">Fiches</span>
-            <span className="hidden lg:inline">Fiches de Cours</span>
+            <span className="2xl:hidden">Fiches</span>
+            <span className="hidden 2xl:inline">Fiches de Cours</span>
             <span className="font-mono text-[11px] text-slate-500">({counts.sheets})</span>
             {currentTab === 'sheets' && (
               <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-400 rounded-full" />
@@ -156,8 +160,8 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Calculator className="w-3.5 h-3.5" />
-            <span className="lg:hidden">TD</span>
-            <span className="hidden lg:inline">Exercices & TD</span>
+            <span className="2xl:hidden">TD</span>
+            <span className="hidden 2xl:inline">Exercices & TD</span>
             <span className="font-mono text-[11px] text-slate-500">({counts.td})</span>
             {currentTab === 'td' && (
               <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-amber-400 rounded-full" />
@@ -183,15 +187,15 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         {/* Zone 3: Controls & Primary CTA */}
-        <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 min-w-0">
           <button
             type="button"
             onClick={onOpenSettings}
             aria-label="Ouvrir le Tableau de Bord IA et les clés API"
-            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-white/[0.1] text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
+            className="flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-white/[0.1] text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
           >
             <Key className={`w-3.5 h-3.5 ${isKeyConfigured || currentProvider === 'local' ? 'text-amber-400' : 'text-sky-400'}`} />
-            <span className="hidden lg:inline max-w-[115px] xl:max-w-[130px] truncate">{modelDisplayName}</span>
+            <span className="hidden lg:inline max-w-[96px] xl:max-w-[114px] truncate">{modelDisplayName}</span>
             <span
               aria-hidden="true"
               className={`w-2 h-2 rounded-full shrink-0 ${
@@ -207,23 +211,60 @@ export const Header: React.FC<HeaderProps> = ({
             <ChevronDown className="hidden sm:inline w-3 h-3 text-slate-400" />
           </button>
 
-          <button
-            type="button"
-            onClick={onOpenKatexRepair}
-            aria-label="Ouvrir le réparateur KaTeX IA"
-            title="Assistant de réparation KaTeX & LaTeX"
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-amber-400/35 text-xs font-semibold text-amber-300 transition-colors whitespace-nowrap shrink-0"
-          >
-            <Wand2 className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden xl:inline">KaTeX AI</span>
-          </button>
+          {/* Interrupteur Mode KaTeX (Cibler / Réparer visible uniquement une fois activé) */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={katexRepairMode}
+              onClick={onToggleKatexRepairMode}
+              aria-label="Activer l'interrupteur KaTeX pour cibler et réparer les formules"
+              title={
+                katexRepairMode
+                  ? 'Interrupteur KaTeX activé : cliquez une formule ou utilisez Cibler / Réparer'
+                  : 'Activer l’interrupteur KaTeX pour afficher les boutons Cibler / Réparer'
+              }
+              className={`flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                katexRepairMode
+                  ? 'bg-amber-500/20 border-amber-400/60 text-amber-200'
+                  : 'bg-[#0A0E19] hover:bg-[#101625] border-white/[0.1] text-slate-300 hover:text-white'
+              }`}
+            >
+              <span
+                aria-hidden="true"
+                className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                  katexRepairMode ? 'bg-amber-500' : 'bg-slate-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                    katexRepairMode ? 'translate-x-3.5' : 'translate-x-0.5'
+                  }`}
+                />
+              </span>
+              <span className="hidden xl:inline">KaTeX</span>
+            </button>
+
+            {katexRepairMode && (
+              <button
+                type="button"
+                onClick={onOpenKatexRepair}
+                aria-label="Ouvrir le réparateur KaTeX IA"
+                title="Cibler ou réparer une formule KaTeX & LaTeX"
+                className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#04060C] text-xs font-bold transition-colors whitespace-nowrap shrink-0 shadow-[0_0_16px_-4px_rgba(245,158,11,0.55)] cursor-pointer animate-fade-in"
+              >
+                <Wand2 className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Cibler / Réparer</span>
+              </button>
+            )}
+          </div>
 
           <button
             type="button"
             onClick={onManualSave}
             aria-label="Sauvegarder les données localement"
             title={lastSavedTime ? `Dernière sauvegarde : ${lastSavedTime}` : 'Sauvegarder'}
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-white/[0.1] text-xs font-medium text-slate-300 hover:text-white transition-colors whitespace-nowrap shrink-0"
+            className="hidden sm:flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-white/[0.1] text-xs font-medium text-slate-300 hover:text-white transition-colors whitespace-nowrap shrink-0"
           >
             <Save className="w-3.5 h-3.5 text-sky-400" />
             <span className="hidden 2xl:inline font-mono text-[11px]">

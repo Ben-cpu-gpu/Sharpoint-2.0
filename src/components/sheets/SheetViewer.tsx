@@ -18,6 +18,7 @@ import {
 import { StudySheet, MasteryLevel } from '../../types/course';
 import { MathView } from '../common/MathView';
 import { generateNotion } from '../../services/aiService';
+import { useKatexRepairContext } from '../../contexts/KatexRepairContext';
 import blackHoleHorizonImg from '../../assets/images/black_hole_horizon_1795123594249.jpg';
 
 interface SheetViewerProps {
@@ -39,7 +40,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
 }) => {
   const [focusLatex, setFocusLatex] = useState(false);
   const [activeRecall, setActiveRecall] = useState(false);
-  const [katexSelectMode, setKatexSelectMode] = useState(false);
+  const { katexRepairMode, toggleKatexRepairMode, onOpenKatexModal } = useKatexRepairContext();
   const [revealedItems, setRevealedItems] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<'all' | 'theorems' | 'formulas' | 'methods' | 'traps'>('all');
   const [imgFailed, setImgFailed] = useState(false);
@@ -51,7 +52,6 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
   const [notionError, setNotionError] = useState<string | null>(null);
 
   const handleOpenFormulaRepair = (snippet: string) => {
-    setKatexSelectMode(false);
     onSelectKatexForRepair?.(snippet, 'sheet', sheet.id);
   };
 
@@ -129,7 +129,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
       data-katex-repair-scope="true"
       data-scope-type="sheet"
       data-scope-id={sheet.id}
-      data-katex-select-mode={katexSelectMode ? 'true' : 'false'}
+      data-katex-select-mode={katexRepairMode ? 'true' : 'false'}
       className={`space-y-6 ${focusLatex ? 'latex-focus' : ''}`}
     >
       {/* Event Horizon Hero Header Card */}
@@ -167,7 +167,9 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-50 tracking-tight leading-tight">
               {sheet.title}
             </h1>
-            <p className="text-sm text-slate-300 mt-1.5 leading-relaxed">{sheet.subtitle}</p>
+            <p className="text-sm text-slate-300 mt-1.5 leading-relaxed">
+              <MathView onOpenRepair={handleOpenFormulaRepair}>{sheet.subtitle}</MathView>
+            </p>
           </div>
 
           {/* Mastery Segmented Control */}
@@ -248,20 +250,47 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
               <span>Ajouter notion IA</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setKatexSelectMode(!katexSelectMode)}
-              aria-pressed={katexSelectMode}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border ${
-                katexSelectMode
-                  ? 'bg-amber-500 text-[#04060C] border-amber-400'
-                  : 'bg-[#04060C]/80 border-white/[0.1] text-slate-200 hover:border-amber-400/40'
-              }`}
-              title="Cliquez directement sur n'importe quelle formule ou surlignez du texte pour le réparer"
-            >
-              <Wand2 className="w-3.5 h-3.5" />
-              <span>{katexSelectMode ? 'Cliquez sur une formule...' : 'Cibler KaTeX'}</span>
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={katexRepairMode}
+                onClick={toggleKatexRepairMode}
+                aria-label="Interrupteur mode ciblage et réparation KaTeX"
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 border cursor-pointer ${
+                  katexRepairMode
+                    ? 'bg-amber-500/18 text-amber-200 border-amber-400/55'
+                    : 'bg-[#04060C]/80 border-white/[0.1] text-slate-300 hover:border-amber-400/40'
+                }`}
+                title="Activez cet interrupteur pour afficher les outils Cibler / Réparer sur toutes les formules"
+              >
+                <span
+                  aria-hidden="true"
+                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                    katexRepairMode ? 'bg-amber-500' : 'bg-slate-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3 w-3 transform rounded-full bg-white shadow transition-transform ${
+                      katexRepairMode ? 'translate-x-3.5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </span>
+                <span>Mode KaTeX</span>
+              </button>
+
+              {katexRepairMode && (
+                <button
+                  type="button"
+                  onClick={() => onOpenKatexModal('')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 border border-amber-300 text-[#04060C] text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer animate-fade-in"
+                  title="Cliquez sur une formule de la fiche ou ouvrez le réparateur KaTeX"
+                >
+                  <Wand2 className="w-3.5 h-3.5" />
+                  <span>Cibler / Réparer</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -476,7 +505,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                         Active Recall : récitez l'énoncé mathématique de tête, puis révélez.
                       </p>
                     ) : (
-                      <MathView math={thm.statement} block onOpenRepair={handleOpenFormulaRepair} />
+                      <MathView math={thm.statement} onOpenRepair={handleOpenFormulaRepair} />
                     )}
                   </div>
 
@@ -504,7 +533,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                       <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <p className="leading-relaxed">
                         <strong className="text-amber-300 font-semibold">Astuce d'examen : </strong>
-                        {thm.professorTip}
+                        <MathView onOpenRepair={handleOpenFormulaRepair}>{thm.professorTip}</MathView>
                       </p>
                     </div>
                   )}
@@ -575,7 +604,9 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                       {formula.validityDomain && !isHidden && (
                         <div>
                           <span className="font-semibold text-slate-400">Validité : </span>
-                          <span className="text-slate-300">{formula.validityDomain}</span>
+                          <span className="text-slate-300">
+                            <MathView onOpenRepair={handleOpenFormulaRepair}>{formula.validityDomain}</MathView>
+                          </span>
                         </div>
                       )}
                     </div>
@@ -646,7 +677,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
                       <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <span>
                         <strong className="text-amber-300 font-semibold">Piège à éviter : </strong>
-                        {method.trapToAvoid}
+                        <MathView onOpenRepair={handleOpenFormulaRepair}>{method.trapToAvoid}</MathView>
                       </span>
                     </div>
                   )}

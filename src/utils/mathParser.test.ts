@@ -123,3 +123,16 @@ test('keeps numeric quiz options with units as spaced text', () => {
     { type: 'text', value: 'eta = 58.5 %' },
   ]);
 });
+
+test('parses mixed French prose and $ / $$ delimiters even when block=true', () => {
+  const input = 'Calcul avec $$\\frac{a}{b_0}$$ et $E = mc^2$.';
+  const segments = parseMathContent(input, true);
+
+  assert.deepEqual(segments, [
+    { type: 'text', value: 'Calcul avec ' },
+    { type: 'block-math', value: '\\frac{a}{b_0}' },
+    { type: 'text', value: ' et ' },
+    { type: 'inline-math', value: 'E = mc^2' },
+    { type: 'text', value: '.' },
+  ]);
+});
