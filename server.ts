@@ -8,6 +8,10 @@ const PORT = Number(process.env.PORT) || 3000;
 const ALLOWED_GEMINI_MODELS = new Set([
   'gemini-4-hydrogen',
   'gemini-3.1-flash-lite',
+  'gemini-3.8-flash-tts',
+  'gemini-3.8-flash',
+  'gemini-3.8-live',
+  'gemini-3.5-flash',
 ]);
 
 const LEGACY_GEMINI_MAP: Record<string, string> = {
