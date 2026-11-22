@@ -18,6 +18,7 @@ import {
 } from '../../utils/pdfTelemetry';
 import { PdfBlockCategory, PdfDetectedBox, PdfScannedPage } from '../../utils/documentExtraction';
 import { AIExtractionProgress } from '../../services/aiService';
+import { CyberpunkSpider } from './CyberpunkSpider';
 
 interface SpiderExtractionScannerProps {
   isOpen: boolean;
@@ -462,9 +463,9 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
                           className="relative transition-transform duration-300 ease-out"
                           style={{ transform: `rotate(${tiltDeg}deg)` }}
                         >
-                          <SpiderSvg hasContent={activeBoxes.length > 0} />
+                          <CyberpunkSpider className="w-16 h-16" />
                         </div>
-                        <div className="px-1.5 py-0.5 rounded bg-[#04060C]/95 border border-cyan-400/50 text-[9px] text-cyan-200 whitespace-nowrap font-mono tracking-wider shadow-md">
+                        <div className="px-1.5 py-0.5 rounded bg-[#04060C]/95 border border-pink-500/45 text-[9px] text-pink-200 whitespace-nowrap font-mono tracking-wider shadow-md">
                           {activeBox
                             ? `${CATEGORY_STYLES[activeBox.category].label.toUpperCase()} · P.${activePage.pageNum}`
                             : `PAGE ${activePage.pageNum}`}
@@ -492,9 +493,9 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
                     className="relative transition-transform duration-300 ease-out"
                     style={{ transform: `rotate(${tiltDeg}deg)` }}
                   >
-                    <SpiderSvg hasContent={previewLines.length > 0} />
+                    <CyberpunkSpider className="w-16 h-16" />
                   </div>
-                  <div className="px-1.5 py-0.5 rounded bg-[#04060C]/90 border border-cyan-400/35 text-[9px] text-cyan-300 whitespace-nowrap font-mono tracking-wider shadow-md">
+                  <div className="px-1.5 py-0.5 rounded bg-[#04060C]/90 border border-pink-500/40 text-[9px] text-pink-200 whitespace-nowrap font-mono tracking-wider shadow-md">
                     {previewLines.length > 0 ? `LIGNE ${activeLineIdx + 1}/${previewLines.length}` : 'LECTURE PDF'}
                   </div>
                 </div>
@@ -619,68 +620,3 @@ export const SpiderExtractionScanner: React.FC<SpiderExtractionScannerProps> = (
     </div>
   );
 };
-
-const SpiderSvg: React.FC<{ hasContent: boolean }> = ({ hasContent }) => (
-  <svg
-    viewBox="0 0 64 64"
-    className="w-11 h-11 drop-shadow-[0_0_12px_rgba(56,189,248,0.55)]"
-    fill="none"
-  >
-    <polygon
-      points="32,39 20,62 44,62"
-      fill="#38BDF8"
-      fillOpacity={hasContent ? 0.25 : 0.12}
-    />
-    <g
-      className="spider-leg-a"
-      stroke="#94A3B8"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="26,27 16,18 9,23" />
-      <polyline points="38,27 48,18 55,23" />
-      <polyline points="25,35 13,39 7,49" />
-      <polyline points="39,35 51,39 57,49" />
-      <circle cx="16" cy="18" r="1.4" fill="#F59E0B" stroke="none" />
-      <circle cx="48" cy="18" r="1.4" fill="#F59E0B" stroke="none" />
-      <circle cx="13" cy="39" r="1.4" fill="#F59E0B" stroke="none" />
-      <circle cx="51" cy="39" r="1.4" fill="#F59E0B" stroke="none" />
-    </g>
-    <g
-      className="spider-leg-b"
-      stroke="#64748B"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="25,31 12,28 6,35" />
-      <polyline points="39,31 52,28 58,35" />
-      <polyline points="27,38 19,48 15,57" />
-      <polyline points="37,38 45,48 49,57" />
-      <circle cx="12" cy="28" r="1.3" fill="#38BDF8" stroke="none" />
-      <circle cx="52" cy="28" r="1.3" fill="#38BDF8" stroke="none" />
-      <circle cx="19" cy="48" r="1.3" fill="#38BDF8" stroke="none" />
-      <circle cx="45" cy="48" r="1.3" fill="#38BDF8" stroke="none" />
-    </g>
-    <polygon
-      points="28,16 36,16 38,23 26,23"
-      fill="#0A0E19"
-      stroke="#F59E0B"
-      strokeOpacity="0.8"
-      strokeWidth="1.3"
-    />
-    <polygon
-      points="27,23 37,23 41,29 39,38 32,41 25,38 23,29"
-      fill="#04060C"
-      stroke="#F59E0B"
-      strokeWidth="1.6"
-    />
-    <circle cx="32" cy="30" r="3.2" stroke="#38BDF8" strokeOpacity="0.7" strokeWidth="1.1" />
-    <g className="spider-optic-pulse">
-      <circle cx="29.5" cy="36.2" r="1.3" fill="#38BDF8" />
-      <circle cx="34.5" cy="36.2" r="1.3" fill="#38BDF8" />
-      <circle cx="32" cy="38.2" r="1" fill="#F59E0B" />
-    </g>
-  </svg>
-);
