@@ -20,6 +20,7 @@ import { SelectionRepairBar, SelectedKatexTarget } from './components/common/Sel
 import { PracticeBatchModal } from './components/common/PracticeBatchModal';
 import { SolarSystemNav } from './components/common/SolarSystemNav';
 import { OfflineIndicator } from './components/common/OfflineIndicator';
+import { ObsidianSyncModal } from './components/common/ObsidianSyncModal';
 import { CloudSyncState, MobileAuthError } from './components/common/CloudSyncControl';
 import { KatexRepairProvider } from './contexts/KatexRepairContext';
 import { SheetViewer } from './components/sheets/SheetViewer';
@@ -112,6 +113,7 @@ export const App: React.FC = () => {
   const [isPracticeBatchOpen, setIsPracticeBatchOpen] = useState(false);
   const [practiceBatchType, setPracticeBatchType] = useState<'td' | 'annale'>('td');
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isObsidianModalOpen, setIsObsidianModalOpen] = useState(false);
   const [apiModalInitialTab, setApiModalInitialTab] = useState<AIProvider | undefined>(undefined);
   const [isTestingAll, setIsTestingAll] = useState(false);
 
@@ -778,6 +780,27 @@ export const App: React.FC = () => {
     showToast(`${newAnnales.length} annale(s) d'examen extraite(s).`);
   };
 
+  const handleImportObsidianSheets = (importedSheets: StudySheet[]) => {
+    const existingIds = new Set(sheets.map(s => s.id));
+    const mergedMap = new Map(sheets.map(s => [s.id, s]));
+    for (const item of importedSheets) {
+      mergedMap.set(item.id, item);
+    }
+    const newlyAdded = importedSheets.filter(s => !existingIds.has(s.id));
+    const updatedExisting = sheets.map(s => mergedMap.get(s.id) || s);
+    const next = [...newlyAdded, ...updatedExisting];
+
+    setSheets(next);
+    if (importedSheets[0]) {
+      setActiveSheetId(importedSheets[0].id);
+      setCurrentTab('sheets');
+    }
+    saveAppData(next, tdExercises, annales);
+    if (cloudUser) {
+      runCloudTask(Promise.all(importedSheets.map(s => upsertStudySheetInCloud(cloudUser.uid, s))));
+    }
+  };
+
   const filteredSheets = sheets.filter(s => {
     if (selectedSubjectId !== 'all' && s.subjectId !== selectedSubjectId) return false;
     if (sheetSearch.trim()) {
@@ -870,6 +893,7 @@ export const App: React.FC = () => {
             onSignOut={handleSignOutGoogle}
             focusMode={focusMode}
             onToggleFocusMode={handleToggleFocusMode}
+            onOpenObsidian={() => setIsObsidianModalOpen(true)}
           />
 
           {toastMessage && (
@@ -907,11 +931,12 @@ export const App: React.FC = () => {
               onTestAllProviders={() => handleTestAllProviders()}
               isTestingAll={isTestingAll}
               focusMode={focusMode}
+              onOpenObsidian={() => setIsObsidianModalOpen(true)}
             />
 
             {/* 1. SECTION FICHES DE COURS */}
             {currentTab === 'sheets' && (
-              <div className="space-y-6">
+              <div className="space-y-6 animate-tab-enter">
                 {isEditingSheet && activeSheet ? (
                   <SheetEditor
                     sheet={activeSheet}
@@ -963,7 +988,7 @@ export const App: React.FC = () => {
                             return (
                               <div
                                 key={s.id}
-                                className={`relative rounded-2xl border transition-all group ${
+                                className={`relative rounded-2xl border card-hover-cosmos group ${
                                   isSelected
                                     ? 'bg-[#101625] border-amber-400/45 shadow-[0_0_24px_-10px_rgba(245,158,11,0.35)]'
                                     : 'bg-[#0A0E19]/85 border-white/[0.08] hover:border-white/[0.18] hover:bg-[#0D1322]'
@@ -1351,6 +1376,18 @@ export const App: React.FC = () => {
             handleAnnalesIngested(newAnnales);
             showToast(`${newAnnales.length} annales générées avec barème et corrigés !`);
           }}
+        />
+
+        <ObsidianSyncModal
+          isOpen={isObsidianModalOpen}
+          onClose={() => setIsObsidianModalOpen(false)}
+          sheets={sheets}
+          tdExercises={tdExercises}
+          annales={annales}
+          subjects={availableSubjects}
+          activeSheet={resolvedActiveSheet || activeSheet}
+          onImportSheets={handleImportObsidianSheets}
+          onNotify={showToast}
         />
 
         <OfflineIndicator />

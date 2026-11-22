@@ -126,11 +126,12 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
 
   return (
     <div
+      key={sheet.id}
       data-katex-repair-scope="true"
       data-scope-type="sheet"
       data-scope-id={sheet.id}
       data-katex-select-mode={katexRepairMode ? 'true' : 'false'}
-      className={`space-y-6 ${focusLatex ? 'latex-focus' : ''}`}
+      className={`space-y-6 animate-sheet-switch ${focusLatex ? 'latex-focus' : ''}`}
     >
       {/* Event Horizon Hero Header Card */}
       <div className="bg-[#0A0E19] border border-white/[0.1] rounded-2xl p-5 sm:p-7 relative overflow-hidden">
@@ -476,7 +477,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
               return (
                 <article
                   key={thm.id}
-                  className="rounded-2xl bg-[#0A0E19] border border-white/[0.08] hover:border-sky-400/30 p-5 sm:p-6 transition-colors"
+                  className="rounded-2xl bg-[#0A0E19] border border-white/[0.08] hover:border-sky-400/30 p-5 sm:p-6 card-hover-cosmos"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-baseline gap-2.5">
@@ -561,7 +562,7 @@ export const SheetViewer: React.FC<SheetViewerProps> = ({
               return (
                 <article
                   key={formula.id}
-                  className="rounded-2xl bg-[#0A0E19] border border-white/[0.08] hover:border-amber-400/30 p-5 flex flex-col justify-between transition-colors"
+                  className="rounded-2xl bg-[#0A0E19] border border-white/[0.08] hover:border-amber-400/30 p-5 flex flex-col justify-between card-hover-cosmos"
                 >
                   <div>
                     <div className="flex items-start justify-between gap-2">

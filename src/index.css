@@ -76,8 +76,76 @@
   }
 }
 
+@keyframes cosmosTabEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.994);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes cosmosSheetSwitch {
+  from {
+    opacity: 0;
+    transform: translate3d(8px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes cosmosModalBackdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cosmosModalPanel {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
 .animate-fade-in {
   animation: cosmosFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-tab-enter {
+  animation: cosmosTabEnter 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-sheet-switch {
+  animation: cosmosSheetSwitch 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-modal-backdrop {
+  animation: cosmosModalBackdrop 170ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-modal-panel {
+  animation: cosmosModalPanel 230ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.card-hover-cosmos {
+  transition: transform 190ms cubic-bezier(0.16, 1, 0.3, 1), border-color 180ms ease, background-color 180ms ease, box-shadow 200ms ease;
+}
+
+@media (hover: hover) {
+  .card-hover-cosmos:hover {
+    transform: translateY(-1.5px);
+  }
 }
 
 @keyframes spiderGaitA {
@@ -167,6 +235,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in,
+  .animate-tab-enter,
+  .animate-sheet-switch,
+  .animate-modal-backdrop,
+  .animate-modal-panel,
   .spider-leg-a,
   .spider-leg-b,
   .spider-optic-pulse,
@@ -174,6 +246,14 @@
   .solar-gyro-b,
   .solar-stage-idle-3d {
     animation: none;
+  }
+
+  .card-hover-cosmos {
+    transition: none;
+  }
+
+  .card-hover-cosmos:hover {
+    transform: none;
   }
 }
 

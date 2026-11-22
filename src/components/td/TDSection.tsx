@@ -101,7 +101,7 @@ export const TDSection: React.FC<TDSectionProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-tab-enter">
       {/* Search & Filters */}
       <div className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl p-4 sm:p-5 space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -258,7 +258,7 @@ export const TDSection: React.FC<TDSectionProps> = ({
                 data-scope-type="td"
                 data-scope-id={exercise.id}
                 data-katex-select-mode={katexRepairMode ? 'true' : 'false'}
-                className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors hover:border-white/[0.15]"
+                className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden card-hover-cosmos hover:border-white/[0.15]"
               >
                 <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0D1322]/60 border-b border-white/[0.06]">
                   <button

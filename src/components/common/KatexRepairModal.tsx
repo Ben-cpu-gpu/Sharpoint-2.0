@@ -120,12 +120,12 @@ Analyse la formule fournie, détecte les erreurs de syntaxe (accolades non ferm�
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-modal-backdrop">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Assistant de Réparation KaTeX"
-        className="relative w-full max-w-xl bg-[#0A0E19] border border-amber-500/35 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="relative w-full max-w-xl bg-[#0A0E19] border border-amber-500/35 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-modal-panel"
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-white/[0.08] flex items-center justify-between bg-[#04060C]">

@@ -61,10 +61,12 @@ function buildGlowSprites(): HTMLCanvasElement[] {
 export const GalacticTouchVFX: React.FC<GalacticTouchVFXProps> = ({ disabled = false }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [particleCount, setParticleCount] = useState(0);
+  const [constellationNodeCount, setConstellationNodeCount] = useState(0);
 
   useEffect(() => {
     if (disabled || typeof window === 'undefined') {
       setParticleCount(0);
+      setConstellationNodeCount(0);
       return;
     }
 
@@ -82,6 +84,7 @@ export const GalacticTouchVFX: React.FC<GalacticTouchVFXProps> = ({ disabled = f
     let viewH = window.innerHeight;
     let particles: CosmicParticle[] = createCosmicParticles(viewW, viewH);
     setParticleCount(particles.length);
+    setConstellationNodeCount(particles.filter(p => p.isConstellationNode).length);
 
     const activePointers = new Map<number, CosmicPointer>();
     const pulses: CosmicPulse[] = [];
@@ -106,6 +109,7 @@ export const GalacticTouchVFX: React.FC<GalacticTouchVFXProps> = ({ disabled = f
         viewH = nextH;
         particles = createCosmicParticles(viewW, viewH);
         setParticleCount(particles.length);
+        setConstellationNodeCount(particles.filter(p => p.isConstellationNode).length);
       } else {
         const sx = nextW / Math.max(1, viewW);
         const sy = nextH / Math.max(1, viewH);
@@ -213,6 +217,11 @@ export const GalacticTouchVFX: React.FC<GalacticTouchVFXProps> = ({ disabled = f
 
       ctx.clearRect(0, 0, viewW, viewH);
 
+      const linkDist = viewW < 640 ? 105 : DEFAULT_COSMIC_CONFIG.connectionDistance;
+      const linkDistSq = linkDist * linkDist;
+      const pointerLinkDist = linkDist * DEFAULT_COSMIC_CONFIG.pointerLinkMultiplier;
+      const pointerLinkDistSq = pointerLinkDist * pointerLinkDist;
+
       // Subtle violet/cyan nebula shimmer around active pointer touches
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -231,13 +240,55 @@ export const GalacticTouchVFX: React.FC<GalacticTouchVFXProps> = ({ disabled = f
         ctx.fill();
       }
 
+      // Constellation network filaments between nearby anchor stars (inspired by neural/starfield mesh)
+      ctx.lineWidth = 0.85;
+      for (let i = 0; i < particles.length; i++) {
+        const a = particles[i];
+        if (!a.isConstellationNode) continue;
+
+        for (let j = i + 1; j < particles.length; j++) {
+          const b = particles[j];
+          if (!b.isConstellationNode) continue;
+
+          const dx = a.x - b.x;
+          const dy = a.y - b.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < linkDistSq) {
+            const ratio = 1 - Math.sqrt(distSq) / linkDist;
+            ctx.strokeStyle = `rgba(186, 218, 255, ${(0.24 * ratio).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+
+        // Interactive filaments linking nearby stars directly toward the cursor / touch
+        for (let k = 0; k < pointerList.length; k++) {
+          const ptr = pointerList[k];
+          if (!ptr.active) continue;
+          const dx = a.x - ptr.x;
+          const dy = a.y - ptr.y;
+          const distSq = dx * dx + dy * dy;
+          if (distSq < pointerLinkDistSq) {
+            const ratio = 1 - Math.sqrt(distSq) / pointerLinkDist;
+            const spec = COSMIC_PALETTE[a.colorIdx] || COSMIC_PALETTE[0];
+            ctx.strokeStyle = `rgba(${spec.coreRgb}, ${(0.44 * ratio).toFixed(3)})`;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(ptr.x, ptr.y);
+            ctx.stroke();
+          }
+        }
+      }
+
       // Draw hundreds of luminous spherical beads with subtle halos
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         const twinkle = 0.8 + 0.2 * Math.sin(timeSec * p.twinkleSpeed + p.phase);
         const speedBoost = Math.min(0.32, Math.hypot(p.vx, p.vy) * 0.045);
         const alpha = Math.min(1, p.baseAlpha * twinkle + speedBoost);
-        const drawSize = p.radius * (7.4 + speedBoost * 5.2);
+        const drawSize = p.radius * (7.2 + speedBoost * 5.0);
         const half = drawSize * 0.5;
         const sprite = sprites[p.colorIdx] || sprites[0];
 
@@ -273,6 +324,7 @@ export const GalacticTouchVFX: React.FC<GalacticTouchVFXProps> = ({ disabled = f
       aria-hidden="true"
       data-testid="galactic-touch-vfx"
       data-particle-count={particleCount}
+      data-constellation-nodes={constellationNodeCount}
       className="fixed inset-0 pointer-events-none z-[5]"
     />
   );

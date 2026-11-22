@@ -108,7 +108,7 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-tab-enter">
       {activeTimerAnnale && (
         <ExamTimerModal
           initialMinutes={activeTimerAnnale.durationMinutes || 120}
@@ -290,7 +290,7 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
                 data-scope-type="annale"
                 data-scope-id={annale.id}
                 data-katex-select-mode={katexRepairMode ? 'true' : 'false'}
-                className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden transition-colors hover:border-white/[0.15]"
+                className="bg-[#0A0E19] border border-white/[0.08] rounded-2xl overflow-hidden card-hover-cosmos hover:border-white/[0.15]"
               >
                 <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-[#0D1322]/60 border-b border-white/[0.06]">
                   <button

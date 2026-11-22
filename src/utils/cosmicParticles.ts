@@ -10,6 +10,7 @@ export const COSMIC_PALETTE: CosmicColorSpec[] = [
   { id: 'cyan', coreRgb: '165, 243, 252', haloRgb: '34, 211, 238' },
   { id: 'magenta', coreRgb: '249, 168, 212', haloRgb: '236, 72, 153' },
   { id: 'indigo-violet', coreRgb: '167, 139, 250', haloRgb: '124, 58, 237' },
+  { id: 'amber-starlight', coreRgb: '253, 230, 138', haloRgb: '245, 158, 11' },
 ];
 
 export interface CosmicParticle {
@@ -29,6 +30,7 @@ export interface CosmicParticle {
   ampY: number;
   twinkleSpeed: number;
   depth: number;
+  isConstellationNode: boolean;
 }
 
 export interface CosmicPointer {
@@ -58,6 +60,8 @@ export interface CosmicPhysicsConfig {
   springStiffness: number;
   damping: number;
   waveAmplitude: number;
+  connectionDistance: number;
+  pointerLinkMultiplier: number;
 }
 
 export const DEFAULT_COSMIC_CONFIG: CosmicPhysicsConfig = {
@@ -67,6 +71,8 @@ export const DEFAULT_COSMIC_CONFIG: CosmicPhysicsConfig = {
   springStiffness: 0.042,
   damping: 0.9,
   waveAmplitude: 13,
+  connectionDistance: 135,
+  pointerLinkMultiplier: 1.5,
 };
 
 /**
@@ -112,14 +118,19 @@ export function createCosmicParticles(
       homeY = rng() * safeH;
     }
 
-    // Color biases slightly along coordinates so electric blue, violet, cyan & magenta blend organically
+    // Color biases slightly along coordinates; keep ~10% warm amber starlight accents matching ESTACA Observatory DA
     const diagRatio = (homeX / safeW) * 0.65 + (1 - homeY / safeH) * 0.35;
-    const rawColorFloat = (diagRatio * 3.4 + rng() * 1.9) % COSMIC_PALETTE.length;
-    const colorIdx = Math.floor(rawColorFloat) % COSMIC_PALETTE.length;
+    const colorIdx =
+      i % 10 === 0
+        ? COSMIC_PALETTE.length - 1
+        : Math.floor((diagRatio * 3.4 + rng() * 1.9) % (COSMIC_PALETTE.length - 1));
 
+    const isConstellationNode = i % 5 < 2;
     const depth = 0.55 + rng() * 0.7;
-    const radius = 1.45 + Math.pow(rng(), 1.35) * 2.85;
-    const baseAlpha = 0.52 + rng() * 0.44;
+    const radius = isConstellationNode
+      ? 1.7 + Math.pow(rng(), 1.3) * 2.5
+      : 1.2 + Math.pow(rng(), 1.45) * 2.1;
+    const baseAlpha = isConstellationNode ? 0.62 + rng() * 0.34 : 0.44 + rng() * 0.42;
 
     particles.push({
       x: homeX,
@@ -138,6 +149,7 @@ export function createCosmicParticles(
       ampY: 4 + rng() * 9,
       twinkleSpeed: 1.1 + rng() * 1.8,
       depth,
+      isConstellationNode,
     });
   }
 
@@ -254,3 +266,85 @@ export function stepCosmicParticles(
     p.y += p.vy * dtNorm;
   }
 }
+
+export interface ConstellationEdge {
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  alpha: number;
+  colorIdx: number;
+}
+
+export interface PointerFilament {
+  px: number;
+  py: number;
+  tx: number;
+  ty: number;
+  alpha: number;
+  colorIdx: number;
+}
+
+/**
+ * Computes deterministic constellation filaments between close anchor particles
+ * and interactive rays toward active pointer/touch coordinates (inspired by neural/starfield mesh).
+ */
+export function computeConstellationEdges(
+  particles: CosmicParticle[],
+  pointers: CosmicPointer[],
+  connectionDistance = DEFAULT_COSMIC_CONFIG.connectionDistance,
+  pointerLinkMultiplier = DEFAULT_COSMIC_CONFIG.pointerLinkMultiplier
+): { edges: ConstellationEdge[]; pointerFilaments: PointerFilament[] } {
+  const edges: ConstellationEdge[] = [];
+  const pointerFilaments: PointerFilament[] = [];
+  const maxDistSq = connectionDistance * connectionDistance;
+  const pointerMaxDist = connectionDistance * pointerLinkMultiplier;
+  const pointerMaxDistSq = pointerMaxDist * pointerMaxDist;
+
+  for (let i = 0; i < particles.length; i++) {
+    const a = particles[i];
+    if (!a.isConstellationNode) continue;
+
+    for (let j = i + 1; j < particles.length; j++) {
+      const b = particles[j];
+      if (!b.isConstellationNode) continue;
+
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < maxDistSq) {
+        const dist = Math.sqrt(distSq);
+        edges.push({
+          ax: a.x,
+          ay: a.y,
+          bx: b.x,
+          by: b.y,
+          alpha: 0.28 * (1 - dist / connectionDistance),
+          colorIdx: a.colorIdx,
+        });
+      }
+    }
+
+    for (let p = 0; p < pointers.length; p++) {
+      const ptr = pointers[p];
+      if (!ptr.active) continue;
+      const dx = a.x - ptr.x;
+      const dy = a.y - ptr.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < pointerMaxDistSq) {
+        const dist = Math.sqrt(distSq);
+        pointerFilaments.push({
+          px: a.x,
+          py: a.y,
+          tx: ptr.x,
+          ty: ptr.y,
+          alpha: 0.48 * (1 - dist / pointerMaxDist),
+          colorIdx: a.colorIdx,
+        });
+      }
+    }
+  }
+
+  return { edges, pointerFilaments };
+}
+

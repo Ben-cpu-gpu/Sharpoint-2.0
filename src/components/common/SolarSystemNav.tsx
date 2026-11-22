@@ -40,6 +40,7 @@ interface SolarSystemNavProps {
   onTestAllProviders: () => Promise<void>;
   isTestingAll: boolean;
   focusMode?: boolean;
+  onOpenObsidian?: () => void;
 }
 
 const API_PROVIDER_ORDER: AIProvider[] = [
@@ -132,6 +133,7 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
   onTestAllProviders,
   isTestingAll,
   focusMode = false,
+  onOpenObsidian,
 }) => {
   const [isSunHovered, setIsSunHovered] = useState(false);
   const [isSunClicked, setIsSunClicked] = useState(false);
@@ -290,6 +292,27 @@ export const SolarSystemNav: React.FC<SolarSystemNavProps> = ({
               className="px-2.5 py-1.5 rounded-lg bg-[#0A0E19] hover:bg-[#101625] border border-amber-400/35 text-[11px] font-semibold text-amber-300 transition-colors whitespace-nowrap"
             >
               Toutes les matières
+            </button>
+          )}
+          {onOpenObsidian && (
+            <button
+              type="button"
+              onClick={onOpenObsidian}
+              aria-label="Ouvrir la synchronisation Obsidian"
+              title="Exporter ou importer un coffre Obsidian (.md, .canvas, .zip)"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/35 text-[11px] font-semibold text-purple-200 transition-colors whitespace-nowrap"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="w-3.5 h-3.5 text-purple-300 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 2L5 7.5 3.5 16l5.5 6 7-1.5 4.5-6.5-2-8L12 2z" />
+              </svg>
+              <span>Obsidian</span>
             </button>
           )}
           <button

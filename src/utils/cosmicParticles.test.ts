@@ -4,6 +4,7 @@ import {
   computeParticleCount,
   createCosmicParticles,
   stepCosmicParticles,
+  computeConstellationEdges,
   CosmicPointer,
   CosmicPulse,
   DEFAULT_COSMIC_CONFIG,
@@ -30,7 +31,10 @@ test('createCosmicParticles builds varied sizes, alphas, and palette colors insi
   assert.ok(particles.length >= 250);
 
   const uniqueColors = new Set(particles.map(p => p.colorIdx));
-  assert.ok(uniqueColors.size >= 4, 'Expected multiple gradient colors (blue/violet/cyan/magenta)');
+  assert.ok(uniqueColors.size >= 5, 'Expected multiple gradient colors including blue/violet/cyan/magenta/amber');
+
+  const constellationNodes = particles.filter(p => p.isConstellationNode);
+  assert.ok(constellationNodes.length >= 70, `Expected >= 70 constellation anchor nodes, got ${constellationNodes.length}`);
 
   const minR = Math.min(...particles.map(p => p.radius));
   const maxR = Math.max(...particles.map(p => p.radius));
@@ -85,4 +89,29 @@ test('stepCosmicParticles produces collective wave motion, circular repulsion, a
     `Expected spring return to reduce displacement (${settledDist} vs ${displacedDist})`
   );
   assert.ok(settledDist < 32, `Expected particle to settle near organic home wave (${settledDist})`);
+});
+
+test('computeConstellationEdges connects nearby nodes and builds interactive pointer filaments', () => {
+  const particles = createCosmicParticles(1000, 800, seededRng(99)).slice(0, 4);
+  particles[0].isConstellationNode = true;
+  particles[0].x = 100;
+  particles[0].y = 100;
+  particles[1].isConstellationNode = true;
+  particles[1].x = 160;
+  particles[1].y = 140;
+  particles[2].isConstellationNode = true;
+  particles[2].x = 800;
+  particles[2].y = 700;
+  particles[3].isConstellationNode = false;
+  particles[3].x = 110;
+  particles[3].y = 110;
+
+  const pointers: CosmicPointer[] = [
+    { id: 1, x: 130, y: 120, vx: 0, vy: 0, active: true, isPressed: false },
+  ];
+
+  const { edges, pointerFilaments } = computeConstellationEdges(particles, pointers, 130, 1.5);
+  assert.equal(edges.length, 1, 'Only particles[0] and particles[1] should link');
+  assert.ok(edges[0].alpha > 0 && edges[0].alpha <= 0.28);
+  assert.equal(pointerFilaments.length, 2, 'Both near constellation nodes should link to pointer');
 });

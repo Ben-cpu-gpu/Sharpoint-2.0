@@ -106,12 +106,12 @@ export const ExamTimerModal: React.FC<ExamTimerModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-modal-backdrop">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Chronomètre d'examen"
-        className="relative w-full max-w-md bg-[#0A0E19] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden p-6 text-center space-y-6"
+        className="relative w-full max-w-md bg-[#0A0E19] border border-white/[0.12] rounded-2xl shadow-2xl overflow-hidden p-6 text-center space-y-6 animate-modal-panel"
       >
         <div className="flex items-center justify-between border-b border-white/[0.08] pb-3.5">
           <div className="flex items-center gap-2 text-amber-400">

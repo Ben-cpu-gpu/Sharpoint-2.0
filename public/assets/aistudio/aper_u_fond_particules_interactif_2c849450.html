@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aperçu Fond Particules</title>
+  <style>
+    /* Style exact fourni pour le canevas en arrière-plan */
+    .fond {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <!-- Canevas d'arrière-plan -->
+  <canvas id="fond" class="fond" aria-hidden="true"></canvas>
+
+  <script>
+    // Récupération du canevas et de son contexte 2D
+    const canvas = document.getElementById('fond');
+    const ctx = canvas.getContext('2d');
+    const souris = { x: -9999, y: -9999 };
+    const DISTANCE = 120;      // distance max entre deux points reliés
+    const NB_POINTS = 90;
+
+    // Ajuste la taille du canevas à celle de la fenêtre
+    function redimensionner() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    redimensionner();
+    window.addEventListener('resize', redimensionner);
+
+    // Suivi de la position de la souris (et prise en charge tactile pour mobile)
+    window.addEventListener('mousemove', e => {
+      souris.x = e.clientX;
+      souris.y = e.clientY;
+    });
+    window.addEventListener('touchmove', e => {
+      if (e.touches.length > 0) {
+        souris.x = e.touches[0].clientX;
+        souris.y = e.touches[0].clientY;
+      }
+    }, { passive: true });
+    window.addEventListener('touchend', () => {
+      souris.x = -9999;
+      souris.y = -9999;
+    });
+
+    // Initialisation des 90 points avec positions et vitesses aléatoires
+    const points = Array.from({ length: NB_POINTS }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+    }));
+
+    // Boucle principale d'animation
+    function animer() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Déplacement et dessin de chaque particule
+      for (const p of points) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fill();
+      }
+
+      // Connexion des points proches entre eux
+      for (let i = 0; i < points.length; i++) {
+        for (let j = i + 1; j < points.length; j++) {
+          const a = points[i], b = points[j];
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          if (d < DISTANCE) {
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.strokeStyle = `rgba(255,255,255,${1 - d / DISTANCE})`;
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Lignes supplémentaires vers la souris
+      for (const p of points) {
+        const d = Math.hypot(p.x - souris.x, p.y - souris.y);
+        if (d < DISTANCE * 1.5) {
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(souris.x, souris.y);
+          ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - d / (DISTANCE * 1.5))})`;
+          ctx.stroke();
+        }
+      }
+
+      requestAnimationFrame(animer);
+    }
+
+    // Lancement de l'animation
+    animer();
+  </script>
+</body>
+</html>

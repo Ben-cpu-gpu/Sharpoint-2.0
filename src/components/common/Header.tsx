@@ -51,6 +51,7 @@ interface HeaderProps {
   onToggleFocusMode: () => void;
   katexRepairMode: boolean;
   onToggleKatexRepairMode: () => void;
+  onOpenObsidian: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -78,6 +79,7 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleFocusMode,
   katexRepairMode,
   onToggleKatexRepairMode,
+  onOpenObsidian,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentModelId = getSelectedModel();
@@ -96,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-30 w-full bg-[#04060C]/92 border-b border-white/[0.08]">
+    <header className="sticky top-0 z-30 w-full bg-[#04060C]/96 backdrop-blur-md border-b border-white/[0.08]">
       <div className="max-w-[1440px] mx-auto px-2.5 sm:px-4 lg:px-5 h-14 sm:h-16 flex items-center justify-between gap-1.5 sm:gap-2 lg:gap-3 min-w-0">
         {/* Zone 1: Brand Singularity Wordmark */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
@@ -336,6 +338,24 @@ export const Header: React.FC<HeaderProps> = ({
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors"
             >
               <Upload className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={onOpenObsidian}
+              aria-label="Synchroniser avec Obsidian"
+              title="Synchronisation Obsidian (.md / .canvas / .zip)"
+              className="p-1.5 rounded-lg text-purple-300 hover:text-purple-200 hover:bg-purple-500/15 transition-colors"
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 2L5 7.5 3.5 16l5.5 6 7-1.5 4.5-6.5-2-8L12 2z" />
+              </svg>
             </button>
           </div>
 
