@@ -13,6 +13,8 @@ import {
   Play,
   Wand2,
   Zap,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { AnnaleItem, ExerciseStatus, DifficultyLevel } from '../../types/course';
 import { MathView } from '../common/MathView';
@@ -50,6 +52,7 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
   const [revealedHints, setRevealedHints] = useState<Record<string, number>>({});
   const [revealedSolutions, setRevealedSolutions] = useState<Record<string, boolean>>({});
   const [cloningId, setCloningId] = useState<string | null>(null);
+  const [cloneError, setCloneError] = useState<string | null>(null);
   const [activeTimerAnnale, setActiveTimerAnnale] = useState<AnnaleItem | null>(null);
 
   const years = Array.from(new Set(annales.map(a => a.year))).sort((a, b) => b - a);
@@ -96,12 +99,17 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
 
   const handleCloneAnnale = async (annale: AnnaleItem) => {
     setCloningId(annale.id);
+    setCloneError(null);
     try {
       const cloned = (await generateSimilarExercise(annale, 'annale')) as AnnaleItem;
       onAddAnnale(cloned);
       setExpandedCards(prev => ({ ...prev, [cloned.id]: true }));
-    } catch (err) {
-      console.error('Erreur clonage Annale IA', err);
+    } catch (err: any) {
+      const msg =
+        err?.message === 'REQUIRE_USER_CONSENT'
+          ? 'Impossible de cloner l’annale : toutes les IA cloud ont échoué. Vérifiez « Logs IA » ou vos clés relais.'
+          : err?.message || 'Erreur lors de la génération de l’annale similaire.';
+      setCloneError(msg);
     } finally {
       setCloningId(null);
     }
@@ -264,6 +272,23 @@ export const AnnalesSection: React.FC<AnnalesSectionProps> = ({
           </div>
         </div>
       </div>
+
+      {cloneError && (
+        <div className="p-3.5 rounded-xl bg-rose-950/35 border border-rose-500/40 text-rose-200 text-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{cloneError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCloneError(null)}
+            aria-label="Fermer le message d'erreur"
+            className="p-1 rounded hover:bg-white/[0.08]"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Annales List */}
       {filteredAnnales.length === 0 ? (

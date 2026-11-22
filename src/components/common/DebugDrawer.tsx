@@ -37,7 +37,7 @@ export const DebugDrawer: React.FC = () => {
         type="button"
         onClick={() => setIsOpen(true)}
         aria-label="Ouvrir la console d'inspection IA"
-        className="hidden sm:flex fixed bottom-4 right-4 z-40 items-center gap-2 px-3.5 py-2 rounded-xl bg-[#0A0E19]/95 hover:bg-[#101625] text-slate-200 text-xs font-semibold shadow-xl border border-white/[0.1] transition-colors"
+        className="flex fixed bottom-[74px] right-3 md:bottom-4 md:right-4 z-30 items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-[#0A0E19]/95 hover:bg-[#101625] text-slate-200 text-xs font-semibold shadow-xl border border-white/[0.1] transition-colors"
       >
         <Terminal className="w-3.5 h-3.5 text-amber-400" />
         <span>Logs IA</span>

@@ -1,10 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { classifyPdfBlock, PdfDetectedBox, PdfScannedPage } from '../utils/documentExtraction';
 
-// Configuration du worker pdf.js pour le navigateur client
+// Configuration du worker pdf.js bundlé localement par Vite (aucune dépendance CDN externe)
 if (typeof window !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
-  // Worker moderne hébergé sur CDN aligné avec la version de pdfjs-dist
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version || '4.10.38'}/build/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 }
 
 export interface PdfExtractionProgress {

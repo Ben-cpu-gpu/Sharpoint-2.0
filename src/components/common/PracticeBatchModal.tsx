@@ -120,7 +120,7 @@ export const PracticeBatchModal: React.FC<PracticeBatchModalProps> = ({
                 Générateur Multi-Exercices &amp; Annales
               </h2>
               <p className="text-xs text-slate-400 truncate">
-                Routage rapide fiable (Gemini Flash-Lite / Flash + Relais) · Corrections &amp; explications incluses
+                Routage Gemini 4 Hydrogen (mode rapide) + Relais gratuits · Corrections &amp; explications incluses
               </p>
             </div>
           </div>
@@ -310,7 +310,7 @@ export const PracticeBatchModal: React.FC<PracticeBatchModalProps> = ({
               <Loader2 className="w-4 h-4 animate-spin text-sky-400 shrink-0" />
               <div className="min-w-0">
                 <p className="font-semibold text-slate-100 truncate">
-                  {progress?.stepLabel || 'Génération via modèle rapide fiable (Flash-Lite / Flash)...'}
+                  {progress?.stepLabel || 'Génération en cours via Gemini 4 Hydrogen...'}
                 </p>
                 {progress?.model && (
                   <p className="text-[11px] font-mono text-sky-300">

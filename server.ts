@@ -8,17 +8,21 @@ const PORT = Number(process.env.PORT) || 3000;
 const ALLOWED_GEMINI_MODELS = new Set([
   'gemini-4-hydrogen',
   'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
+  'gemini-3.8-flash-tts',
+  'gemini-3.8-flash',
+  'gemini-3.8-live',
+  'gemini-3.5-flash',
 ]);
 
 const LEGACY_GEMINI_MAP: Record<string, string> = {
-  'gemini-3.1-pro': 'gemini-2.5-pro',
+  'gemini-3.1-pro': 'gemini-4-hydrogen',
   'gemini-3-flash': 'gemini-4-hydrogen',
+  'gemini-2.5-pro': 'gemini-4-hydrogen',
+  'gemini-2.5-flash': 'gemini-4-hydrogen',
   'gemini-2.0-flash': 'gemini-4-hydrogen',
-  'gemini-2.0-pro': 'gemini-2.5-pro',
+  'gemini-2.0-pro': 'gemini-4-hydrogen',
   'gemini-1.5-flash': 'gemini-4-hydrogen',
-  'gemini-1.5-pro': 'gemini-2.5-pro',
+  'gemini-1.5-pro': 'gemini-4-hydrogen',
   'gemini-pro': 'gemini-4-hydrogen',
 };
 
@@ -82,13 +86,11 @@ function parseUpstreamError(err: unknown): ParsedUpstreamError {
 const SERVER_GEMINI_FALLBACK_ORDER = [
   'gemini-4-hydrogen',
   'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
 ] as const;
 
 const SERVER_GEMINI_LIGHT_ORDER = [
-  'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
   'gemini-4-hydrogen',
+  'gemini-3.1-flash-lite',
 ] as const;
 
 function resolveServerGeminiModels(
@@ -97,10 +99,17 @@ function resolveServerGeminiModels(
   preferLightFastModel = false
 ): string[] {
   if (preferLightFastModel) {
+    const preferred = resolveServerGeminiModel(requested);
     if (!allowCascade) {
-      return [SERVER_GEMINI_LIGHT_ORDER[0]];
+      return [preferred];
     }
-    return [...SERVER_GEMINI_LIGHT_ORDER];
+    const chain: string[] = [preferred];
+    for (const fallback of SERVER_GEMINI_LIGHT_ORDER) {
+      if (!chain.includes(fallback)) {
+        chain.push(fallback);
+      }
+    }
+    return chain;
   }
   const primary = resolveServerGeminiModel(requested);
   if (!allowCascade) {
@@ -113,6 +122,28 @@ function resolveServerGeminiModels(
     }
   }
   return chain;
+}
+
+function buildGeminiConfig(
+  model: string,
+  systemPrompt?: unknown,
+  responseMimeType?: unknown,
+  preferLightFastModel = false
+): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
+  if (typeof responseMimeType === 'string' && responseMimeType.trim()) {
+    config.responseMimeType = responseMimeType.trim();
+  }
+  if (typeof systemPrompt === 'string' && systemPrompt.trim()) {
+    config.systemInstruction = systemPrompt.trim();
+  }
+  if (model.startsWith('gemini-4-')) {
+    // Gemini 4 Hydrogen: LOW pour réparation KaTeX/packs rapides, MEDIUM pour extraction complète (évite les timeouts proxy 502)
+    config.thinkingConfig = {
+      thinkingLevel: preferLightFastModel ? ThinkingLevel.LOW : ThinkingLevel.MEDIUM,
+    };
+  }
+  return config;
 }
 
 async function generateWithRetry(
@@ -185,23 +216,10 @@ async function startServer() {
       return;
     }
 
-    const requestedMaxTokens = Number(req.body?.maxOutputTokens);
-    const maxOutputTokens =
-      Number.isFinite(requestedMaxTokens) && requestedMaxTokens >= 1024 && requestedMaxTokens <= 32768
-        ? Math.round(requestedMaxTokens)
-        : 16384;
-
-    const config: Record<string, unknown> = {
-      maxOutputTokens,
-      responseMimeType:
-        typeof req.body?.responseMimeType === 'string' && req.body.responseMimeType.trim()
-          ? req.body.responseMimeType.trim()
-          : 'application/json',
-    };
-
-    if (typeof req.body?.systemPrompt === 'string' && req.body.systemPrompt.trim()) {
-      config.systemInstruction = req.body.systemPrompt.trim();
-    }
+    const responseMimeType =
+      typeof req.body?.responseMimeType === 'string' && req.body.responseMimeType.trim()
+        ? req.body.responseMimeType.trim()
+        : 'application/json';
 
     let lastFailure: ParsedUpstreamError = {
       statusCode: 502,
@@ -213,6 +231,12 @@ async function startServer() {
     for (const model of candidateModels) {
       lastFailedModel = model;
       try {
+        const config = buildGeminiConfig(
+          model,
+          req.body?.systemPrompt,
+          responseMimeType,
+          preferLightFastModel
+        );
         const response = await generateWithRetry(ai, model, userPrompt, config, 1);
         const text = response.text;
         if (text && text.trim()) {
@@ -270,25 +294,27 @@ async function startServer() {
       return;
     }
 
-    const requestedMaxTokens = Number(req.body?.maxOutputTokens);
-    const maxOutputTokens =
-      Number.isFinite(requestedMaxTokens) && requestedMaxTokens >= 1024 && requestedMaxTokens <= 32768
-        ? Math.round(requestedMaxTokens)
-        : 16384;
-
-    const config: Record<string, unknown> = {
-      maxOutputTokens,
-    };
-    if (typeof req.body?.systemPrompt === 'string' && req.body.systemPrompt.trim()) {
-      config.systemInstruction = req.body.systemPrompt.trim();
-    }
-    if (typeof req.body?.responseMimeType === 'string' && req.body.responseMimeType.trim()) {
-      config.responseMimeType = req.body.responseMimeType.trim();
-    }
-
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    let clientClosed = false;
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        clientClosed = true;
+      }
+    });
+
+    res.write(': connected\n\n');
+
+    // Heartbeat toutes les 3s pour empêcher le proxy Cloud Run / navigateur de couper en 502 pendant la réflexion Gemini 4
+    const keepaliveTimer = setInterval(() => {
+      if (!clientClosed && !res.writableEnded) {
+        res.write(': keepalive\n\n');
+      }
+    }, 3000);
 
     let lastFailure: ParsedUpstreamError = {
       statusCode: 502,
@@ -297,52 +323,70 @@ async function startServer() {
     };
     let lastFailedModel = candidateModels[0];
 
-    for (const model of candidateModels) {
-      lastFailedModel = model;
-      let streamedAnyText = false;
-      try {
-        res.write(`data: ${JSON.stringify({ stage: 'model', model })}\n\n`);
-        const stream = await ai.models.generateContentStream({
-          model,
-          contents: userPrompt,
-          config,
-        });
+    try {
+      for (const model of candidateModels) {
+        if (clientClosed || res.writableEnded) break;
+        lastFailedModel = model;
+        let streamedAnyText = false;
+        try {
+          res.write(`data: ${JSON.stringify({ stage: 'model', model })}\n\n`);
+          const config = buildGeminiConfig(
+            model,
+            req.body?.systemPrompt,
+            req.body?.responseMimeType || 'application/json',
+            preferLightFastModel
+          );
+          const stream = await ai.models.generateContentStream({
+            model,
+            contents: userPrompt,
+            config,
+          });
 
-        for await (const chunk of stream) {
-          const chunkText = chunk.text || '';
-          if (chunkText) {
-            streamedAnyText = true;
-            res.write(`data: ${JSON.stringify({ text: chunkText, model })}\n\n`);
+          for await (const chunk of stream) {
+            if (clientClosed || res.writableEnded) break;
+            const chunkText = chunk.text || '';
+            if (chunkText) {
+              streamedAnyText = true;
+              res.write(`data: ${JSON.stringify({ text: chunkText, model })}\n\n`);
+            }
+          }
+
+          if (clientClosed) {
+            return;
+          }
+
+          if (streamedAnyText) {
+            res.write(`data: ${JSON.stringify({ done: true, model })}\n\n`);
+            res.end();
+            return;
+          }
+          lastFailure = {
+            statusCode: 502,
+            message: `Réponse stream Gemini vide sur ${model}.`,
+            rawPayload: 'EMPTY_STREAM',
+          };
+        } catch (err) {
+          lastFailure = parseUpstreamError(err);
+          if (streamedAnyText || lastFailure.statusCode === 401 || lastFailure.statusCode === 403) {
+            break;
           }
         }
-
-        if (streamedAnyText) {
-          res.write(`data: ${JSON.stringify({ done: true, model })}\n\n`);
-          res.end();
-          return;
-        }
-        lastFailure = {
-          statusCode: 502,
-          message: `Réponse stream Gemini vide sur ${model}.`,
-          rawPayload: 'EMPTY_STREAM',
-        };
-      } catch (err) {
-        lastFailure = parseUpstreamError(err);
-        if (streamedAnyText || lastFailure.statusCode === 401 || lastFailure.statusCode === 403) {
-          break;
-        }
       }
-    }
 
-    res.write(
-      `data: ${JSON.stringify({
-        error: lastFailure.message,
-        statusCode: lastFailure.statusCode,
-        model: lastFailedModel,
-        rawPayload: lastFailure.rawPayload,
-      })}\n\n`
-    );
-    res.end();
+      if (!clientClosed && !res.writableEnded) {
+        res.write(
+          `data: ${JSON.stringify({
+            error: lastFailure.message,
+            statusCode: lastFailure.statusCode,
+            model: lastFailedModel,
+            rawPayload: lastFailure.rawPayload,
+          })}\n\n`
+        );
+        res.end();
+      }
+    } finally {
+      clearInterval(keepaliveTimer);
+    }
   });
 
   app.post('/api/gemini/health', async (req: Request, res: Response) => {

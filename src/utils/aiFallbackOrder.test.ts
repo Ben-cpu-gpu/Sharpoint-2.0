@@ -25,7 +25,7 @@ test('default priority order puts Gemini first before awesome-free-llm-apis rela
 test('includes configured free LLM APIs (Groq, Cerebras, Mistral, OpenRouter) after Gemini', () => {
   const res = resolveFallbackChain({
     selectedProvider: 'gemini',
-    selectedModel: 'gemini-2.5-flash',
+    selectedModel: 'gemini-4-hydrogen',
     configuredKeys: {
       gemini: true,
       groq: true,
@@ -41,7 +41,7 @@ test('includes configured free LLM APIs (Groq, Cerebras, Mistral, OpenRouter) af
 test('skips missing keys while preserving Gemini -> Groq -> Cerebras -> Mistral -> OpenRouter precedence', () => {
   const res = resolveFallbackChain({
     selectedProvider: 'gemini',
-    selectedModel: 'gemini-2.5-flash',
+    selectedModel: 'gemini-4-hydrogen',
     configuredKeys: { gemini: false, groq: true, cerebras: false, mistral: true, openrouter: true },
   });
 
@@ -89,7 +89,9 @@ test('migrates legacy Claude, ChatGPT, local-priority, and old Gemini aliases cl
   assert.equal(normalizeStoredModelId('claude-sonnet-4-20250514'), DEFAULT_MODEL_ID);
   assert.equal(normalizeStoredModelId('gpt-4o'), DEFAULT_MODEL_ID);
   assert.equal(normalizeStoredModelId('gemini-2.0-flash'), 'gemini-4-hydrogen');
-  assert.equal(normalizeStoredModelId('gemini-3.1-pro'), 'gemini-2.5-pro');
+  assert.equal(normalizeStoredModelId('gemini-3.1-pro'), 'gemini-4-hydrogen');
+  assert.equal(normalizeStoredModelId('gemini-2.5-pro'), 'gemini-4-hydrogen');
+  assert.equal(normalizeStoredModelId('gemini-2.5-flash'), 'gemini-4-hydrogen');
   assert.equal(normalizeStoredProvider('local', LEGACY_LOCAL_MODEL_ID), 'gemini');
   assert.equal(normalizeStoredProvider('claude', 'claude-sonnet-4-20250514'), 'gemini');
   assert.equal(normalizeStoredProvider('openai', 'gpt-4o'), 'gemini');
@@ -99,11 +101,9 @@ test('migrates legacy Claude, ChatGPT, local-priority, and old Gemini aliases cl
 });
 
 test('getCandidateModelsForProvider cascades across backup models for each provider', () => {
-  assert.deepEqual(getCandidateModelsForProvider('gemini', 'gemini-2.5-flash'), [
-    'gemini-2.5-flash',
+  assert.deepEqual(getCandidateModelsForProvider('gemini', 'gemini-4-hydrogen'), [
     'gemini-4-hydrogen',
     'gemini-3.1-flash-lite',
-    'gemini-2.5-pro',
   ]);
   assert.deepEqual(getCandidateModelsForProvider('groq', 'gemini-4-hydrogen'), [
     'llama-3.3-70b-versatile',
@@ -117,12 +117,10 @@ test('getCandidateModelsForProvider cascades across backup models for each provi
   ]);
 });
 
-test('getCandidateModelsForProvider prioritizes lighter fast reliable models when preferLightFastModel is true', () => {
+test('getCandidateModelsForProvider keeps gemini-4-hydrogen first even when preferLightFastModel is true while prioritizing lighter relay models', () => {
   assert.deepEqual(getCandidateModelsForProvider('gemini', 'gemini-4-hydrogen', true), [
-    'gemini-3.1-flash-lite',
-    'gemini-2.5-flash',
     'gemini-4-hydrogen',
-    'gemini-2.5-pro',
+    'gemini-3.1-flash-lite',
   ]);
   assert.deepEqual(getCandidateModelsForProvider('groq', 'llama-3.3-70b-versatile', true), [
     'llama-3.1-8b-instant',

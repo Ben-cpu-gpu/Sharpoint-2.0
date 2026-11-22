@@ -44,6 +44,7 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
   const [score, setScore] = useState(0);
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [isGeneratingMoreQuiz, setIsGeneratingMoreQuiz] = useState(false);
+  const [quizGenError, setQuizGenError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -56,6 +57,7 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
       setIsAnswerSubmitted(false);
       setScore(0);
       setQuizCompleted(false);
+      setQuizGenError(null);
     }
   }, [isOpen, initialMode, sheet]);
 
@@ -120,14 +122,19 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
 
   const handleGenerateMoreQuiz = async () => {
     setIsGeneratingMoreQuiz(true);
+    setQuizGenError(null);
     try {
       const context = `Titre: ${sheet.title}. Chapitre: ${sheet.chapter}. Théorèmes: ${sheet.theorems.map(t => t.name).join(', ')}`;
       const newQuestions = await generateQuiz(context);
       setQuizQuestions(newQuestions);
       if (onUpdateQuiz) onUpdateQuiz(newQuestions);
       handleResetQuiz();
-    } catch (err) {
-      console.error('Erreur génération quiz', err);
+    } catch (err: any) {
+      const msg =
+        err?.message === 'REQUIRE_USER_CONSENT'
+          ? 'Toutes les IA cloud ont échoué ou sont indisponibles pour générer de nouvelles questions. Consultez « Logs IA ».'
+          : err?.message || 'Erreur lors de la génération de nouvelles questions IA.';
+      setQuizGenError(msg);
     } finally {
       setIsGeneratingMoreQuiz(false);
     }
@@ -329,6 +336,13 @@ export const RevisionModal: React.FC<RevisionModalProps> = ({
                     </span>
                   )}
                 </div>
+
+                {quizGenError && (
+                  <div className="max-w-md mx-auto p-3 rounded-xl bg-rose-950/35 border border-rose-500/40 text-rose-200 text-xs flex items-start gap-2 text-left">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <span>{quizGenError}</span>
+                  </div>
+                )}
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
                   <button

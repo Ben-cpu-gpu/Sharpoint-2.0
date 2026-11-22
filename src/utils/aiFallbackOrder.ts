@@ -27,13 +27,15 @@ export const DEFAULT_MODEL_ID = 'gemini-4-hydrogen';
 
 const LEGACY_MODEL_ALIASES: Record<string, string> = {
   [LEGACY_LOCAL_MODEL_ID]: DEFAULT_MODEL_ID,
-  'gemini-3.1-pro': 'gemini-2.5-pro',
-  'gemini-3-flash': 'gemini-4-hydrogen',
-  'gemini-2.0-flash': 'gemini-4-hydrogen',
-  'gemini-2.0-pro': 'gemini-2.5-pro',
-  'gemini-1.5-flash': 'gemini-4-hydrogen',
-  'gemini-1.5-pro': 'gemini-2.5-pro',
-  'gemini-pro': 'gemini-4-hydrogen',
+  'gemini-3.1-pro': DEFAULT_MODEL_ID,
+  'gemini-3-flash': DEFAULT_MODEL_ID,
+  'gemini-2.5-flash': DEFAULT_MODEL_ID,
+  'gemini-2.5-pro': DEFAULT_MODEL_ID,
+  'gemini-2.0-flash': DEFAULT_MODEL_ID,
+  'gemini-2.0-pro': DEFAULT_MODEL_ID,
+  'gemini-1.5-flash': DEFAULT_MODEL_ID,
+  'gemini-1.5-pro': DEFAULT_MODEL_ID,
+  'gemini-pro': DEFAULT_MODEL_ID,
   'claude-sonnet-5.5': DEFAULT_MODEL_ID,
   'claude-sonnet-4-20250514': DEFAULT_MODEL_ID,
   'claude-haiku-5.5': DEFAULT_MODEL_ID,
@@ -109,8 +111,6 @@ export const PROVIDER_MODEL_CHAINS: Record<CloudAIProvider, readonly string[]> =
   gemini: [
     'gemini-4-hydrogen',
     'gemini-3.1-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
   ],
   groq: [
     'llama-3.3-70b-versatile',
@@ -135,10 +135,8 @@ export const PROVIDER_MODEL_CHAINS: Record<CloudAIProvider, readonly string[]> =
 
 export const LIGHT_FAST_MODEL_CHAINS: Record<CloudAIProvider, readonly string[]> = {
   gemini: [
-    'gemini-3.1-flash-lite',
-    'gemini-2.5-flash',
     'gemini-4-hydrogen',
-    'gemini-2.5-pro',
+    'gemini-3.1-flash-lite',
   ],
   groq: [
     'llama-3.1-8b-instant',
@@ -163,8 +161,8 @@ export const LIGHT_FAST_MODEL_CHAINS: Record<CloudAIProvider, readonly string[]>
 
 /**
  * Retourne la liste ordonnée des modèles valides à tenter pour un fournisseur donné.
- * Place le modèle préféré en tête (s'il appartient bien à ce fournisseur), suivi des modèles de secours.
- * Si preferLightFastModel === true, privilégie les modèles rapides/légers (ex: gemini-3.1-flash-lite, gemini-2.5-flash).
+ * Pour Gemini, conserve toujours Gemini 4 Hydrogen (modèle principal du compte Google) en priorité #1,
+ * même en mode rapide (le serveur réduit alors thinkingLevel à LOW), avec Flash-Lite en secours.
  */
 export function getCandidateModelsForProvider(
   provider: CloudAIProvider,
@@ -174,7 +172,7 @@ export function getCandidateModelsForProvider(
   const defaults = preferLightFastModel
     ? LIGHT_FAST_MODEL_CHAINS[provider] || PROVIDER_MODEL_CHAINS[provider] || []
     : PROVIDER_MODEL_CHAINS[provider] || [];
-  if (!preferLightFastModel && preferredModel && defaults.includes(preferredModel)) {
+  if ((!preferLightFastModel || provider === 'gemini') && preferredModel && defaults.includes(preferredModel)) {
     return [preferredModel, ...defaults.filter(m => m !== preferredModel)];
   }
   return [...defaults];

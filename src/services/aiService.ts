@@ -73,16 +73,8 @@ async function waitMs(ms: number): Promise<void> {
 
 function resolveClientGeminiModel(modelOverride?: string): string {
   const rawModel = modelOverride || getSelectedModel();
-  if (
-    rawModel === 'gemini-4-hydrogen' ||
-    rawModel === 'gemini-3.1-flash-lite' ||
-    rawModel === 'gemini-2.5-flash' ||
-    rawModel === 'gemini-2.5-pro'
-  ) {
+  if (rawModel === 'gemini-4-hydrogen' || rawModel === 'gemini-3.1-flash-lite') {
     return rawModel;
-  }
-  if (rawModel.includes('3.1') && rawModel.includes('pro')) {
-    return 'gemini-2.5-pro';
   }
   return DEFAULT_MODEL_ID;
 }
@@ -101,8 +93,8 @@ export async function fetchGeminiServerStatus(): Promise<boolean> {
 }
 
 /**
- * 1. APPEL GEMINI CÔTÉ SERVEUR (/api/gemini/stream & /api/gemini/generate)
- * Gère le réveil automatique du conteneur (HTTP 502/HTML warmup) et le streaming temps réel.
+ * 1. APPEL GEMINI CÔTÉ SERVEUR (/api/gemini/stream avec fallback /api/gemini/generate)
+ * Utilise le flux SSE avec heartbeat keepalive pour éviter les coupures proxy HTTP 502 sur Gemini 4 Hydrogen.
  */
 async function callGemini(
   systemPrompt: string,
@@ -114,63 +106,60 @@ async function callGemini(
 ): Promise<{ text: string; activeModel: string }> {
   const signal = execOptions?.signal;
   throwIfAborted(signal);
-  const modelName = execOptions?.preferLightFastModel
-    ? 'gemini-3.1-flash-lite'
-    : resolveClientGeminiModel(modelOverride);
+  const modelName = resolveClientGeminiModel(modelOverride);
   const fullSystemPrompt = `${STRICT_EXHAUSTIVENESS_RULE}\n\n${systemPrompt}`;
-  const maxAttempts = 3;
+  const maxAttempts = 2;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     throwIfAborted(signal);
-    // 1) En mode streaming interactif, essaie /api/gemini/stream pour fournir une progression réelle en direct
-    if (onProgress) {
-      try {
-        const streamRes = await fetch('/api/gemini/stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal,
-          body: JSON.stringify({
-            systemPrompt: fullSystemPrompt,
-            userPrompt,
-            model: modelName,
-            responseMimeType: 'application/json',
-            cascadeModels: allowCascade,
-            preferLightFastModel: Boolean(execOptions?.preferLightFastModel),
-            maxOutputTokens: execOptions?.maxOutputTokens ?? 16384,
-          }),
-        });
+    // 1) Flux SSE prioritaire (/api/gemini/stream) avec keepalive 3s anti-502 (avec ou sans callback onProgress)
+    try {
+      const streamRes = await fetch('/api/gemini/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal,
+        body: JSON.stringify({
+          systemPrompt: fullSystemPrompt,
+          userPrompt,
+          model: modelName,
+          responseMimeType: 'application/json',
+          cascadeModels: allowCascade,
+          preferLightFastModel: Boolean(execOptions?.preferLightFastModel),
+        }),
+      });
 
-        const contentType = streamRes.headers.get('content-type') || '';
-        if (streamRes.ok && streamRes.body && contentType.includes('text/event-stream')) {
-          const reader = streamRes.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let fullText = '';
-          let activeModel = modelName;
-          let streamErr: { statusCode: number; message: string; rawPayload?: string } | null = null;
+      const contentType = streamRes.headers.get('content-type') || '';
+      if (streamRes.ok && streamRes.body && contentType.includes('text/event-stream')) {
+        const reader = streamRes.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        let activeModel = modelName;
+        let streamErr: { statusCode: number; message: string; rawPayload?: string } | null = null;
 
-          while (true) {
-            throwIfAborted(signal);
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const events = buffer.split('\n\n');
-            buffer = events.pop() || '';
-            for (const evt of events) {
-              const line = evt.split('\n').find(l => l.startsWith('data: '));
-              if (!line) continue;
-              const payload = JSON.parse(line.slice(6));
-              if (payload.model) activeModel = payload.model;
-              if (payload.error) {
-                streamErr = {
-                  statusCode: payload.statusCode || 502,
-                  message: payload.error,
-                  rawPayload: payload.rawPayload,
-                };
-                break;
-              }
-              if (payload.text) {
-                fullText += payload.text;
+        while (true) {
+          throwIfAborted(signal);
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
+          for (const evt of events) {
+            const line = evt.split('\n').find(l => l.startsWith('data: '));
+            if (!line) continue;
+            const payload = JSON.parse(line.slice(6));
+            if (payload.model) activeModel = payload.model;
+            if (payload.error) {
+              streamErr = {
+                statusCode: payload.statusCode || 502,
+                message: payload.error,
+                rawPayload: payload.rawPayload,
+              };
+              break;
+            }
+            if (payload.text) {
+              fullText += payload.text;
+              if (onProgress) {
                 const estPct = Math.min(94, Math.max(18, 18 + Math.round(fullText.length / 75)));
                 onProgress({
                   provider: 'Gemini (Serveur)',
@@ -182,46 +171,68 @@ async function callGemini(
                 });
               }
             }
-            if (streamErr) break;
           }
+          if (streamErr) break;
+        }
 
-          if (!streamErr && fullText.trim()) {
-            setServerGeminiConfigured(true);
-            return { text: cleanJsonOutput(fullText), activeModel };
-          }
-          if (streamErr?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
-            setServerGeminiConfigured(false);
-            throw {
-              provider: 'Gemini',
-              model: activeModel,
-              statusCode: 503,
-              message: streamErr.message,
-              rawPayload: streamErr.rawPayload,
-            };
-          }
-        } else if (!streamRes.ok) {
-          const maybeHtml = await streamRes.text();
-          if ((streamRes.status === 502 || streamRes.status === 503 || isWarmupHtmlPayload(maybeHtml)) && attempt < maxAttempts - 1) {
-            onProgress({
+        if (!streamErr && fullText.trim()) {
+          setServerGeminiConfigured(true);
+          return { text: cleanJsonOutput(fullText), activeModel };
+        }
+        if (streamErr?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
+          setServerGeminiConfigured(false);
+          throw {
+            provider: 'Gemini',
+            model: activeModel,
+            statusCode: 503,
+            message: streamErr.message,
+            rawPayload: streamErr.rawPayload,
+          };
+        }
+        if (streamErr) {
+          const isTransientStream =
+            (streamErr.statusCode === 502 || streamErr.statusCode === 503) && attempt < maxAttempts - 1;
+          if (isTransientStream) {
+            onProgress?.({
               provider: 'Gemini (Serveur)',
-              model: modelName,
-              aiPct: 12,
+              model: activeModel,
+              aiPct: 14,
               bytesReceived: 0,
-              stepLabel: `Démarrage du serveur Gemini (tentative ${attempt + 2}/${maxAttempts})...`,
+              stepLabel: `Nouvelle tentative Gemini (${attempt + 2}/${maxAttempts})...`,
             });
-            await waitMs(1500 * (attempt + 1));
+            await waitMs(1200 * (attempt + 1));
             continue;
           }
+          throw {
+            provider: 'Gemini',
+            model: activeModel,
+            statusCode: streamErr.statusCode,
+            message: streamErr.message,
+            rawPayload: streamErr.rawPayload,
+          };
         }
-      } catch (err: any) {
-        if (err?.name === 'AbortError' || signal?.aborted) {
-          throw err;
+      } else if (!streamRes.ok) {
+        const maybeHtml = await streamRes.text();
+        if ((streamRes.status === 502 || streamRes.status === 503 || isWarmupHtmlPayload(maybeHtml)) && attempt < maxAttempts - 1) {
+          onProgress?.({
+            provider: 'Gemini (Serveur)',
+            model: modelName,
+            aiPct: 12,
+            bytesReceived: 0,
+            stepLabel: `Démarrage du serveur Gemini (tentative ${attempt + 2}/${maxAttempts})...`,
+          });
+          await waitMs(1500 * (attempt + 1));
+          continue;
         }
-        if (err?.rawPayload === 'MISSING_SERVER_GEMINI_API_KEY') {
-          throw err;
-        }
-        // Poursuit vers l'appel /api/gemini/generate non-stream en secours
       }
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || signal?.aborted) {
+        throw err;
+      }
+      if (err?.provider === 'Gemini' && err?.statusCode && err.statusCode !== 502 && err.statusCode !== 503) {
+        throw err;
+      }
+      // Poursuit vers l'appel /api/gemini/generate non-stream en secours
     }
 
     // 2) Appel standard POST /api/gemini/generate
@@ -236,7 +247,6 @@ async function callGemini(
         responseMimeType: 'application/json',
         cascadeModels: allowCascade,
         preferLightFastModel: Boolean(execOptions?.preferLightFastModel),
-        maxOutputTokens: execOptions?.maxOutputTokens ?? 16384,
       }),
     });
 
@@ -920,9 +930,7 @@ export async function executeWithFallback<T>(
     const candidateModels =
       currentProvider === 'gemini'
         ? [
-            execOptions?.preferLightFastModel
-              ? 'gemini-3.1-flash-lite'
-              : currentProvider === selectedProvider
+            currentProvider === selectedProvider
               ? selectedModel
               : DEFAULT_PROVIDER_MODELS.gemini,
           ]
@@ -1294,7 +1302,7 @@ Structure JSON attendue :
       forceLocal,
       () => localExtractToolbox(text, subjectId),
       onProgress,
-      { signal, maxOutputTokens: 16384 }
+      { signal }
     );
   }
 
@@ -1318,7 +1326,7 @@ Structure JSON attendue :
           stepLabel: `${segmentLabel} — ${prog.stepLabel}`,
         });
       },
-      { signal, maxOutputTokens: 16384 }
+      { signal }
     );
     partialSheets.push(sheetPart);
   }
@@ -1419,7 +1427,7 @@ Format JSON attendu :
       forceLocal,
       () => localParseTd(text, type, subjectId),
       onProgress,
-      { signal, maxOutputTokens: 16384 }
+      { signal }
     );
   }
 
@@ -1443,7 +1451,7 @@ Format JSON attendu :
           stepLabel: `${segmentLabel} — ${prog.stepLabel}`,
         });
       },
-      { signal, maxOutputTokens: 16384 }
+      { signal }
     );
     allLists.push(part);
   }
@@ -1652,7 +1660,7 @@ function localBuildPracticeBatch(params: PracticeBatchParams): Array<TDExercise 
 
 /**
  * Génère un lot complet d'exercices de TD ou d'annales avec corrections détaillées et explications pédagogiques
- * en privilégiant les modèles légers, rapides et fiables (gemini-3.1-flash-lite / gemini-2.5-flash / relais rapides).
+ * en privilégiant Gemini 4 Hydrogen (mode Thinking LOW rapide) et Flash-Lite / relais gratuits en secours.
  */
 export async function generatePracticeBatch(
   params: PracticeBatchParams
@@ -1768,7 +1776,7 @@ ${sheetSummary}`;
     forceLocal,
     () => localBuildPracticeBatch(params),
     onProgress,
-    { signal, preferLightFastModel: true, maxOutputTokens: 16384 }
+    { signal, preferLightFastModel: true }
   );
 }
 
